@@ -19,6 +19,7 @@ class HomePageState extends State<HomePage> {
   String selectedCategory = ''; // Track selected category
   bool isCategoriesLoading = true;
   bool isProductsLoading = true;
+  List<Map<String, dynamic>> orderItems = []; // Track order items
 
   @override
   void initState() {
@@ -46,11 +47,11 @@ class HomePageState extends State<HomePage> {
       setState(() {
         isCategoriesLoading = false;
       });
-      SnackBar(
-          content: Text('Error fetching categories: $e',
-              style: TextStyle(color: Colors.white)
-          ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error fetching categories: $e', style: const TextStyle(color: Colors.white)),
           backgroundColor: AppColors.jet,
+        ),
       );
     }
   }
@@ -66,11 +67,11 @@ class HomePageState extends State<HomePage> {
       setState(() {
         isProductsLoading = false;
       });
-      SnackBar(
-        content: Text('Error fetching products: $e',
-            style: TextStyle(color: Colors.white)
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error fetching products: $e', style: const TextStyle(color: Colors.white)),
+          backgroundColor: AppColors.jet,
         ),
-        backgroundColor: AppColors.jet,
       );
     }
   }
@@ -93,6 +94,16 @@ class HomePageState extends State<HomePage> {
       return products; // Show all products if no category is selected
     }
     return products.where((product) => product['category'] == selectedCategory).toList();
+  }
+
+  void _addToOrder(Map<String, dynamic> product) {
+    setState(() {
+      orderItems.add(product);
+    });
+  }
+
+  double _calculateTotalAmount() {
+    return orderItems.fold(0, (sum, item) => sum + (item['price'] as num));
   }
 
   @override
@@ -218,42 +229,55 @@ class HomePageState extends State<HomePage> {
                             itemCount: filteredProducts.length,
                             itemBuilder: (context, index) {
                               final product = filteredProducts[index];
-                              return Card(
-                                elevation: 2,
-                                child: Column(
-                                  children: [
-                                    Expanded(
-                                      child: Image.network(
-                                        product['image'],
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (context, error, stackTrace) {
-                                          return const Icon(Icons.error, color: Colors.red);
-                                        },
+                              return GestureDetector(
+                                onTap: () {
+                                  showModalBottomSheet(
+                                    context: context,
+                                    builder: (context) {
+                                      return CustomizeOrderPanel(
+                                        product: product,
+                                        onAddToOrder: _addToOrder,
+                                      );
+                                    },
+                                  );
+                                },
+                                child: Card(
+                                  elevation: 2,
+                                  child: Column(
+                                    children: [
+                                      Expanded(
+                                        child: Image.network(
+                                          product['image'],
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            return const Icon(Icons.error, color: Colors.red);
+                                          },
+                                        ),
                                       ),
-                                    ),
-                                    Padding(
-                                      padding: const EdgeInsets.all(8.0),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            product['name'],
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.bold,
+                                      Padding(
+                                        padding: const EdgeInsets.all(8.0),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              product['name'],
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
+                                              ),
                                             ),
-                                          ),
-                                          Text(
-                                            '₱${product['price'].toString()}',
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.green,
+                                            Text(
+                                              '₱${product['price'].toString()}',
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.green,
+                                              ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               );
                             },
@@ -290,38 +314,114 @@ class HomePageState extends State<HomePage> {
                     width: double.infinity,
                     child: Row(
                       children: [
-                        Text('Total Amount: ${'PHP 00.00'}'),
-                        SizedBox(width: 10,),
-                        Text('Total Items: ${'0'}'),
+                        Text('Total Amount: ₱${_calculateTotalAmount().toStringAsFixed(2)}'),
+                        const SizedBox(width: 10),
+                        Text('Total Items: ${orderItems.length}'),
                       ],
                     ),
                   ),
                   Row(
                     children: [
                       ElevatedButton(
-                          onPressed: (){
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => WelcomePage()),
-                            );
-                          },
-                          child: Text('Cancel Order')
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const WelcomePage()),
+                          );
+                        },
+                        child: const Text('Cancel Order'),
                       ),
-
-                      SizedBox(width: 20,),
-
+                      const SizedBox(width: 20),
                       ElevatedButton(
-                        onPressed: (){},
+                        onPressed: () {
+                          // Handle order confirmation
+                        },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.airforceBlue,
                         ),
-                        child: Text('Confirm', style: TextStyle(color: Colors.white),),
+                        child: const Text('Confirm', style: TextStyle(color: Colors.white)),
                       ),
-                    ]
-                  )
+                    ],
+                  ),
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Customize Order Panel
+class CustomizeOrderPanel extends StatelessWidget {
+  final Map<String, dynamic> product;
+  final Function(Map<String, dynamic>) onAddToOrder;
+
+  const CustomizeOrderPanel({
+    required this.product,
+    required this.onAddToOrder,
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Product Name
+          Text(
+            product['name'],
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 10),
+          // Product Image
+          Image.network(
+            product['image'],
+            height: 100,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return const Icon(Icons.error, color: Colors.red);
+            },
+          ),
+          const SizedBox(height: 10),
+          // Customization Options (Example: Add Notes)
+          const Text(
+            'Add Notes:',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          TextField(
+            decoration: const InputDecoration(
+              hintText: 'Enter your notes...',
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (value) {
+              // Update notes in the product
+              product['notes'] = value;
+            },
+          ),
+          const SizedBox(height: 20),
+          // Add to Order Button
+          ElevatedButton(
+            onPressed: () {
+              // Pass the customized product back to the parent
+              onAddToOrder(product);
+              Navigator.pop(context); // Close the panel
+            },
+            child: const Text('Add to Order'),
           ),
         ],
       ),
