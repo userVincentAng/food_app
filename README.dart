@@ -1,326 +1,171 @@
-// import 'package:flutter/material.dart';
-// import 'package:food_app/color.dart';
-// import 'package:food_app/pages/login_page.dart';
-// import 'package:food_app/pages/welcome_page.dart';
-// import 'package:http/http.dart' as http;
-// import 'dart:convert';
-//
-// class MerchantPage extends StatefulWidget {
-//   const MerchantPage({super.key});
-//
-//   @override
-//   State<MerchantPage> createState() => _MerchantPageState();
-// }
-//
-// class _MerchantPageState extends State<MerchantPage> {
-//   List<dynamic> merchants = [];
-//   List<dynamic> posList = [];
-//   String? selectedMerchant;
-//   String? selectedPos;
-//   bool isMerchantSelected = false;
-//   bool isPosSelected = false;
-//
-//   @override
-//   void initState() {
-//     super.initState();
-//     fetchMerchants();
-//   }
-//
-//   Future<void> fetchMerchants() async {
-//     final response = await http.get(Uri.parse(
-//         'https://raw.githubusercontent.com/JayMatawaran/APIs/refs/heads/main/merchants%26pos.json'));
-//     if (response.statusCode == 200) {
-//       setState(() {
-//         merchants = json.decode(response.body)['merchants'];
-//       });
-//     } else {
-//       throw Exception('Failed to load merchants');
-//     }
-//   }
-//
-//   void onMerchantSelected(String merchant) {
-//     setState(() {
-//       selectedMerchant = merchant;
-//       isMerchantSelected = true;
-//       selectedPos = null;
-//       isPosSelected = false;
-//       posList = merchants.firstWhere((m) => m['merchant_name'] == merchant)['pos_systems'];
-//     });
-//   }
-//
-//   void onPosSelected(String pos) {
-//     setState(() {
-//       selectedPos = pos;
-//       isPosSelected = true;
-//     });
-//   }
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     final screenWidth = MediaQuery.of(context).size.width;
-//     final buttonWidth = screenWidth * 0.8;
-//     return Scaffold(
-//       body: Center(
-//         child: SingleChildScrollView(
-//           padding: EdgeInsets.all(20),
-//           child: Column(
-//             mainAxisAlignment: MainAxisAlignment.center,
-//             children: [
-//               SizedBox(
-//                 height: 150,
-//                 width: 150,
-//                 child: Image.asset('assets/images/logo.png'),
-//               ),
-//               SizedBox(height: 20),
-//               SizedBox(
-//                 width: buttonWidth,
-//                 child: ElevatedButton(
-//                   onPressed: () {
-//                     showModalBottomSheet(
-//                       context: context,
-//                       builder: (context) {
-//                         return MerchantSelectionPanel(
-//                           merchants: merchants,
-//                           onMerchantSelected: onMerchantSelected,
-//                         );
-//                       },
-//                     );
-//                   },
-//                   style: ElevatedButton.styleFrom(
-//                     padding: EdgeInsets.symmetric(vertical: 15),
-//                     shape: RoundedRectangleBorder(
-//                       borderRadius: BorderRadius.circular(10),
-//                     ),
-//                     backgroundColor: AppColors.jet,
-//                   ),
-//                   child: Text(
-//                     'Select Merchant',
-//                     style: TextStyle(
-//                       fontSize: 18,
-//                       color: Colors.white,
-//                     ),
-//                   ),
-//                 ),
-//               ),
-//               SizedBox(height: 16),
-//               SizedBox(
-//                 width: buttonWidth,
-//                 child: ElevatedButton(
-//                   onPressed: isMerchantSelected
-//                       ? () {
-//                     showModalBottomSheet(
-//                       context: context,
-//                       builder: (context) {
-//                         return PosSelectionPanel(
-//                           posList: posList,
-//                           onPosSelected: onPosSelected,
-//                         );
-//                       },
-//                     );
-//                   }
-//                       : null,
-//                   style: ElevatedButton.styleFrom(
-//                     padding: EdgeInsets.symmetric(vertical: 15),
-//                     shape: RoundedRectangleBorder(
-//                       borderRadius: BorderRadius.circular(10),
-//                     ),
-//                     backgroundColor: isMerchantSelected ? AppColors.jet : Colors.grey,
-//                   ),
-//                   child: Text(
-//                     'Select POS',
-//                     style: TextStyle(
-//                       fontSize: 18,
-//                       color: Colors.white,
-//                     ),
-//                   ),
-//                 ),
-//               ),
-//               SizedBox(height: 16),
-//               SizedBox(
-//                 width: buttonWidth,
-//                 child: ElevatedButton(
-//                   onPressed: isPosSelected ? () {
-//                     Navigator.push(
-//                       context,
-//                       MaterialPageRoute(builder: (context) => WelcomePage()),
-//                     );
-//                   } : null,
-//                   style: ElevatedButton.styleFrom(
-//                     padding: EdgeInsets.symmetric(vertical: 15),
-//                     shape: RoundedRectangleBorder(
-//                       borderRadius: BorderRadius.circular(10),
-//                     ),
-//                     backgroundColor: isPosSelected ? AppColors.airforceBlue : Colors.grey,
-//                   ),
-//                   child: Text(
-//                     'Continue',
-//                     style: TextStyle(
-//                       fontSize: 18,
-//                       color: Colors.white,
-//                       fontWeight: FontWeight.bold,
-//                     ),
-//                   ),
-//                 ),
-//               ),
-//               SizedBox(height: 16),
-//               SizedBox(
-//                 width: buttonWidth,
-//                 child: ElevatedButton(
-//                   onPressed: () {
-//                     Navigator.pushReplacement(
-//                       context,
-//                       MaterialPageRoute(builder: (context) => LoginPage()),
-//                     );
-//                   },
-//                   child: Text('Logout'),
-//                 ),
-//               ),
-//             ],
-//           ),
-//         ),
-//       ),
-//     );
-//   }
-// }
-//
-// class MerchantSelectionPanel extends StatefulWidget {
-//   final List<dynamic> merchants;
-//   final Function(String) onMerchantSelected;
-//
-//   const MerchantSelectionPanel({super.key,
-//     required this.merchants,
-//     required this.onMerchantSelected,
-//   });
-//
-//   @override
-//   State<MerchantSelectionPanel> createState() => _MerchantSelectionPanelState();
-// }
-//
-// class _MerchantSelectionPanelState extends State<MerchantSelectionPanel> {
-//   TextEditingController searchController = TextEditingController();
-//   List<dynamic> filteredMerchants = [];
-//
-//   @override
-//   void initState() {
-//     super.initState();
-//     filteredMerchants = widget.merchants;
-//     searchController.addListener(_filterMerchants);
-//   }
-//
-//   void _filterMerchants() {
-//     final query = searchController.text.toLowerCase();
-//     setState(() {
-//       filteredMerchants = widget.merchants.where((merchant) {
-//         final merchantName = merchant['merchant_name'].toString().toLowerCase();
-//         return merchantName.contains(query);
-//       }).toList();
-//     });
-//   }
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     return Column(
-//       children: [
-//         Padding(
-//           padding: const EdgeInsets.all(8.0),
-//           child: TextField(
-//             controller: searchController,
-//             decoration: InputDecoration(
-//               labelText: 'Search Merchant',
-//               prefixIcon: Icon(Icons.search),
-//               border: OutlineInputBorder(
-//                 borderRadius: BorderRadius.circular(10),
-//               ),
-//             ),
-//           ),
-//         ),
-//         Expanded(
-//           child: ListView.builder(
-//             itemCount: filteredMerchants.length,
-//             itemBuilder: (context, index) {
-//               final merchant = filteredMerchants[index]['merchant_name'];
-//               return ListTile(
-//                 title: Text(merchant),
-//                 onTap: () {
-//                   widget.onMerchantSelected(merchant);
-//                   Navigator.pop(context);
-//                 },
-//               );
-//             },
-//           ),
-//         ),
-//       ],
-//     );
-//   }
-// }
-//
-// class PosSelectionPanel extends StatefulWidget {
-//   final List<dynamic> posList;
-//   final Function(String) onPosSelected;
-//
-//   const PosSelectionPanel({super.key,
-//     required this.posList,
-//     required this.onPosSelected,
-//   });
-//
-//   @override
-//   State<PosSelectionPanel> createState() => _PosSelectionPanelState();
-// }
-//
-// class _PosSelectionPanelState extends State<PosSelectionPanel> {
-//   TextEditingController searchController = TextEditingController();
-//   List<dynamic> filteredPosList = [];
-//
-//   @override
-//   void initState() {
-//     super.initState();
-//     filteredPosList = widget.posList;
-//     searchController.addListener(_filterPosList);
-//   }
-//
-//   void _filterPosList() {
-//     final query = searchController.text.toLowerCase();
-//     setState(() {
-//       filteredPosList = widget.posList.where((pos) {
-//         final posName = pos['pos_name'].toString().toLowerCase();
-//         return posName.contains(query);
-//       }).toList();
-//     });
-//   }
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     return Column(
-//       children: [
-//         Padding(
-//           padding: const EdgeInsets.all(8.0),
-//           child: TextField(
-//             controller: searchController,
-//             decoration: InputDecoration(
-//               labelText: 'Search POS',
-//               prefixIcon: Icon(Icons.search),
-//               border: OutlineInputBorder(
-//                 borderRadius: BorderRadius.circular(10),
-//               ),
-//             ),
-//           ),
-//         ),
-//         Expanded(
-//           child: ListView.builder(
-//             itemCount: filteredPosList.length,
-//             itemBuilder: (context, index) {
-//               final pos = filteredPosList[index]['pos_name'];
-//               return ListTile(
-//                 title: Text(pos),
-//                 onTap: () {
-//                   widget.onPosSelected(pos);
-//                   Navigator.pop(context);
-//                 },
-//               );
-//             },
-//           ),
-//         ),
-//       ],
-//     );
-//   }
-// }
+import 'package:flutter/material.dart';
+import 'package:food_app/color.dart';
+import 'package:food_app/pages/welcome_page.dart';
+import '../api_service.dart';
+import 'carousel_img.dart';
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  HomePageState createState() => HomePageState();
+}
+
+class HomePageState extends State<HomePage> {
+  // Existing code...
+
+  @override
+  Widget build(BuildContext context) {
+    // Existing code...
+  }
+}
+
+class CustomizeOrderPanel extends StatefulWidget {
+  final Map<String, dynamic> product;
+  final Function(Map<String, dynamic>) onAddToOrder;
+
+  const CustomizeOrderPanel({
+    required this.product,
+    required this.onAddToOrder,
+    super.key,
+  });
+
+  @override
+  _CustomizeOrderPanelState createState() => _CustomizeOrderPanelState();
+}
+
+class _CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
+  String? selectedVariant;
+  List<String> selectedModifiers = [];
+
+  Map<String, List<String>> categoryModifiers = {
+    'sandwiches': ['Mayo Sauce', 'BBQ Sauce', 'Mustard', 'Ketchup'],
+    'coffee': ['Extra Shot', 'Cream', 'Sugar', 'Honey'],
+    'meals': ['Extra Rice', 'Extra Sauce', 'No Spice', 'Extra Spice'],
+    'drinks': ['No Ice', 'Less Ice', 'Extra Ice'],
+    'pasta': ['Extra Cheese', 'Extra Sauce', 'No Meat', 'Extra Meat'],
+  };
+
+  Map<String, List<String>> categoryVariants = {
+    'coffee': ['Small', 'Medium', 'Large'],
+    'meals': ['Regular', 'Large'],
+    'drinks': ['330ml', '500ml', '1L'],
+    'pasta': ['Half Portion', 'Full Portion'],
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final hasVariant = widget.product['hasVariant'];
+    final hasModifiers = widget.product['hasModifiers'];
+    final category = widget.product['category'];
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            widget.product['name'],
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Image.network(
+            widget.product['image'],
+            height: 100,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return const Icon(Icons.error, color: Colors.red);
+            },
+          ),
+          const SizedBox(height: 10),
+          if (hasVariant) ...[
+            const Text(
+              'Choose Size:',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            DropdownButton<String>(
+              value: selectedVariant,
+              hint: const Text('Select a size'),
+              onChanged: (String? newValue) {
+                setState(() {
+                  selectedVariant = newValue;
+                });
+              },
+              items: categoryVariants[category]?.map<DropdownMenuItem<String>>((String value) {
+                return DropdownMenuItem<String>(
+                  value: value,
+                  child: Text(value),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 10),
+          ],
+          if (hasModifiers) ...[
+            const Text(
+              'Add Modifiers:',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Wrap(
+              children: categoryModifiers[category]?.map((modifier) {
+                return FilterChip(
+                  label: Text(modifier),
+                  selected: selectedModifiers.contains(modifier),
+                  onSelected: (bool selected) {
+                    setState(() {
+                      if (selected) {
+                        selectedModifiers.add(modifier);
+                      } else {
+                        selectedModifiers.remove(modifier);
+                      }
+                    });
+                  },
+                );
+              }).toList() ?? [],
+            ),
+            const SizedBox(height: 10),
+          ],
+          const Text(
+            'Add Notes:',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          TextField(
+            decoration: const InputDecoration(
+              hintText: 'Enter your notes...',
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (value) {
+              widget.product['notes'] = value;
+            },
+          ),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: () {
+              widget.product['variant'] = selectedVariant;
+              widget.product['modifiers'] = selectedModifiers;
+              widget.onAddToOrder(widget.product);
+              Navigator.pop(context);
+            },
+            child: const Text('Add to Order'),
+          ),
+        ],
+      ),
+    );
+  }
+}
