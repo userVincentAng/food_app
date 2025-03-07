@@ -4,8 +4,6 @@ import 'package:food_app/pages/login_page.dart';
 import 'package:food_app/pages/welcome_page.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:fuzzy/fuzzy.dart'; // For fuzzy matching
-import 'package:rxdart/rxdart.dart'; // For debouncing
 
 class MerchantPage extends StatefulWidget {
   const MerchantPage({super.key});
@@ -92,6 +90,7 @@ class _MerchantPageState extends State<MerchantPage> {
                     padding: EdgeInsets.symmetric(vertical: 15),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
+                    ),
                     backgroundColor: AppColors.jet,
                   ),
                   child: Text(
@@ -121,10 +120,11 @@ class _MerchantPageState extends State<MerchantPage> {
                   }
                       : null,
                   style: ElevatedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      backgroundColor: isMerchantSelected ? AppColors.jet : Colors.grey,
+                    padding: EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    backgroundColor: isMerchantSelected ? AppColors.jet : Colors.grey,
                   ),
                   child: Text(
                     'Select POS',
@@ -149,6 +149,7 @@ class _MerchantPageState extends State<MerchantPage> {
                     padding: EdgeInsets.symmetric(vertical: 15),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
+                    ),
                     backgroundColor: isPosSelected ? AppColors.airforceBlue : Colors.grey,
                   ),
                   child: Text(
@@ -186,7 +187,7 @@ class MerchantSelectionPanel extends StatefulWidget {
   final List<dynamic> merchants;
   final Function(String) onMerchantSelected;
 
-  const MerchantSelectionPanel({
+  const MerchantSelectionPanel({super.key,
     required this.merchants,
     required this.onMerchantSelected,
   });
@@ -198,33 +199,21 @@ class MerchantSelectionPanel extends StatefulWidget {
 class _MerchantSelectionPanelState extends State<MerchantSelectionPanel> {
   TextEditingController searchController = TextEditingController();
   List<dynamic> filteredMerchants = [];
-  final _searchSubject = PublishSubject<String>();
 
   @override
   void initState() {
     super.initState();
     filteredMerchants = widget.merchants;
-
-    _searchSubject
-        .debounceTime(Duration(milliseconds: 300)) // Debounce for 300ms
-        .listen((query) {
-      filterMerchants(query);
-    });
-
-    searchController.addListener(() {
-      _searchSubject.add(searchController.text);
-    });
+    searchController.addListener(_filterMerchants);
   }
 
-  void filterMerchants(String query) {
-    final fuzzy = Fuzzy(
-      widget.merchants,
-      options: FuzzyOptions(
-        keys: [WeightedKey<dynamic>(getter: (m) => m['merchant_name'], weight: 1.0)],
-      ),
-    );
+  void _filterMerchants() {
+    final query = searchController.text.toLowerCase();
     setState(() {
-      filteredMerchants = fuzzy.search(query).map((result) => result.item).toList();
+      filteredMerchants = widget.merchants.where((merchant) {
+        final merchantName = merchant['merchant_name'].toString().toLowerCase();
+        return merchantName.contains(query);
+      }).toList();
     });
   }
 
@@ -237,7 +226,7 @@ class _MerchantSelectionPanelState extends State<MerchantSelectionPanel> {
           child: TextField(
             controller: searchController,
             decoration: InputDecoration(
-              hintText: 'Search Merchant',
+              labelText: 'Search Merchant',
               prefixIcon: Icon(Icons.search),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -251,10 +240,7 @@ class _MerchantSelectionPanelState extends State<MerchantSelectionPanel> {
             itemBuilder: (context, index) {
               final merchant = filteredMerchants[index]['merchant_name'];
               return ListTile(
-                title: HighlightedText(
-                  text: merchant,
-                  query: searchController.text,
-                ),
+                title: Text(merchant),
                 onTap: () {
                   widget.onMerchantSelected(merchant);
                   Navigator.pop(context);
@@ -266,20 +252,13 @@ class _MerchantSelectionPanelState extends State<MerchantSelectionPanel> {
       ],
     );
   }
-
-  @override
-  void dispose() {
-    _searchSubject.close();
-    searchController.dispose();
-    super.dispose();
-  }
 }
 
 class PosSelectionPanel extends StatefulWidget {
   final List<dynamic> posList;
   final Function(String) onPosSelected;
 
-  const PosSelectionPanel({
+  const PosSelectionPanel({super.key,
     required this.posList,
     required this.onPosSelected,
   });
@@ -291,33 +270,21 @@ class PosSelectionPanel extends StatefulWidget {
 class _PosSelectionPanelState extends State<PosSelectionPanel> {
   TextEditingController searchController = TextEditingController();
   List<dynamic> filteredPosList = [];
-  final _searchSubject = PublishSubject<String>();
 
   @override
   void initState() {
     super.initState();
     filteredPosList = widget.posList;
-
-    _searchSubject
-        .debounceTime(Duration(milliseconds: 300)) // Debounce for 300ms
-        .listen((query) {
-      filterPosList(query);
-    });
-
-    searchController.addListener(() {
-      _searchSubject.add(searchController.text);
-    });
+    searchController.addListener(_filterPosList);
   }
 
-  void filterPosList(String query) {
-    final fuzzy = Fuzzy(
-      widget.posList,
-      options: FuzzyOptions(
-        keys: [WeightedKey<dynamic>(getter: (p) => p['pos_name'], weight: 1.0)],
-      ),
-    );
+  void _filterPosList() {
+    final query = searchController.text.toLowerCase();
     setState(() {
-      filteredPosList = fuzzy.search(query).map((result) => result.item).toList();
+      filteredPosList = widget.posList.where((pos) {
+        final posName = pos['pos_name'].toString().toLowerCase();
+        return posName.contains(query);
+      }).toList();
     });
   }
 
@@ -330,7 +297,7 @@ class _PosSelectionPanelState extends State<PosSelectionPanel> {
           child: TextField(
             controller: searchController,
             decoration: InputDecoration(
-              hintText: 'Search POS',
+              labelText: 'Search POS',
               prefixIcon: Icon(Icons.search),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -344,10 +311,7 @@ class _PosSelectionPanelState extends State<PosSelectionPanel> {
             itemBuilder: (context, index) {
               final pos = filteredPosList[index]['pos_name'];
               return ListTile(
-                title: HighlightedText(
-                  text: pos,
-                  query: searchController.text,
-                ),
+                title: Text(pos),
                 onTap: () {
                   widget.onPosSelected(pos);
                   Navigator.pop(context);
@@ -357,56 +321,6 @@ class _PosSelectionPanelState extends State<PosSelectionPanel> {
           ),
         ),
       ],
-    );
-  }
-
-  @override
-  void dispose() {
-    _searchSubject.close();
-    searchController.dispose();
-    super.dispose();
-  }
-}
-
-class HighlightedText extends StatelessWidget {
-  final String text;
-  final String query;
-
-  const HighlightedText({required this.text, required this.query});
-
-  @override
-  Widget build(BuildContext context) {
-    final textLower = text.toLowerCase();
-    final queryLower = query.toLowerCase();
-    final matches = <TextSpan>[];
-    int start = 0;
-
-    while (start < textLower.length) {
-      final index = textLower.indexOf(queryLower, start);
-      if (index == -1) {
-        matches.add(TextSpan(text: text.substring(start)));
-        break;
-      }
-      if (index > start) {
-        matches.add(TextSpan(text: text.substring(start, index)));
-      }
-      matches.add(
-        TextSpan(
-          text: text.substring(index, index + query.length),
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.blue,
-          ),
-        ),
-      );
-      start = index + query.length;
-    }
-
-    return RichText(
-      text: TextSpan(
-        style: DefaultTextStyle.of(context).style,
-        children: matches,
-      ),
     );
   }
 }
