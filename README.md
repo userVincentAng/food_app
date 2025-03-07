@@ -92,7 +92,6 @@ class _MerchantPageState extends State<MerchantPage> {
                     padding: EdgeInsets.symmetric(vertical: 15),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
-                    ),
                     backgroundColor: AppColors.jet,
                   ),
                   child: Text(
@@ -125,7 +124,6 @@ class _MerchantPageState extends State<MerchantPage> {
                       padding: EdgeInsets.symmetric(vertical: 15),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
-                      ),
                       backgroundColor: isMerchantSelected ? AppColors.jet : Colors.grey,
                   ),
                   child: Text(
@@ -151,7 +149,6 @@ class _MerchantPageState extends State<MerchantPage> {
                     padding: EdgeInsets.symmetric(vertical: 15),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
-                    ),
                     backgroundColor: isPosSelected ? AppColors.airforceBlue : Colors.grey,
                   ),
                   child: Text(
