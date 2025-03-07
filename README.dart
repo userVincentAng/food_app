@@ -233,10 +233,14 @@ class HomePageState extends State<HomePage> {
                                 onTap: () {
                                   showModalBottomSheet(
                                     context: context,
+                                    isScrollControlled: true, // Allows the sheet to take up more space
                                     builder: (context) {
-                                      return CustomizeOrderPanel(
-                                        product: product,
-                                        onAddToOrder: _addToOrder,
+                                      return SizedBox(
+                                        height: MediaQuery.of(context).size.height * 0.75, // 75% of screen height
+                                        child: CustomizeOrderPanel(
+                                          product: product,
+                                          onAddToOrder: _addToOrder,
+                                        ),
                                       );
                                     },
                                   );
@@ -372,18 +376,18 @@ class _CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
   List<String> selectedModifiers = [];
 
   Map<String, List<String>> categoryModifiers = {
-    'sandwiches': ['Mayo Sauce', 'BBQ Sauce', 'Mustard', 'Ketchup'],
-    'coffee': ['Extra Shot', 'Cream', 'Sugar', 'Honey'],
-    'meals': ['Extra Rice', 'Extra Sauce', 'No Spice', 'Extra Spice'],
-    'drinks': ['No Ice', 'Less Ice', 'Extra Ice'],
-    'pasta': ['Extra Cheese', 'Extra Sauce', 'No Meat', 'Extra Meat'],
+    'Sandwiches': ['Mayo Sauce', 'BBQ Sauce', 'Mustard', 'Ketchup'],
+    'Coffee': ['Extra Shot', 'Cream', 'Sugar', 'Honey'],
+    'Meals': ['Extra Rice', 'Extra Sauce', 'No Spice', 'Extra Spice'],
+    'Drinks': ['No Ice', 'Less Ice', 'Extra Ice'],
+    'Pasta': ['Extra Cheese', 'Extra Sauce', 'No Meat', 'Extra Meat'],
   };
 
   Map<String, List<String>> categoryVariants = {
-    'coffee': ['Small', 'Medium', 'Large'],
-    'meals': ['Regular', 'Large'],
-    'drinks': ['330ml', '500ml', '1L'],
-    'pasta': ['Half Portion', 'Full Portion'],
+    'Coffee': ['Small', 'Medium', 'Large'],
+    'Meals': ['Regular', 'Large'],
+    'Drinks': ['330ml', '500ml', '1L'],
+    'Pasta': ['Half Portion', 'Full Portion'],
   };
 
   @override
@@ -400,8 +404,8 @@ class _CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
+          // Product Name
           Text(
             widget.product['name'],
             style: const TextStyle(
@@ -410,6 +414,7 @@ class _CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
             ),
           ),
           const SizedBox(height: 10),
+          // Product Image
           Image.network(
             widget.product['image'],
             height: 100,
@@ -419,6 +424,7 @@ class _CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
             },
           ),
           const SizedBox(height: 10),
+          // Variant Selection (if applicable)
           if (hasVariant) ...[
             const Text(
               'Choose Size:',
@@ -444,6 +450,7 @@ class _CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
             ),
             const SizedBox(height: 10),
           ],
+          // Modifiers Selection (if applicable)
           if (hasModifiers) ...[
             const Text(
               'Add Modifiers:',
@@ -471,6 +478,9 @@ class _CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
             ),
             const SizedBox(height: 10),
           ],
+          // Spacer to push the remaining content to the bottom
+          const Spacer(),
+          // Add Notes
           const Text(
             'Add Notes:',
             style: TextStyle(
@@ -488,6 +498,7 @@ class _CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
             },
           ),
           const SizedBox(height: 20),
+          // Add to Order Button
           ElevatedButton(
             onPressed: () {
               widget.product['variant'] = selectedVariant;
