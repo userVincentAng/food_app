@@ -5,7 +5,6 @@ import 'package:food_app/pages/welcome_page.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
-
 class MerchantPage extends StatefulWidget {
   const MerchantPage({super.key});
 
@@ -121,17 +120,17 @@ class _MerchantPageState extends State<MerchantPage> {
                   }
                       : null,
                   style: ElevatedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      backgroundColor: isMerchantSelected ? AppColors.jet : Colors.grey,
+                    padding: EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    backgroundColor: isMerchantSelected ? AppColors.jet : Colors.grey,
                   ),
                   child: Text(
                     'Select POS',
                     style: TextStyle(
                       fontSize: 18,
-                      color: Colors.white,
+                      color: isMerchantSelected ? Colors.white : Colors.grey,
                     ),
                   ),
                 ),
@@ -157,7 +156,7 @@ class _MerchantPageState extends State<MerchantPage> {
                     'Continue',
                     style: TextStyle(
                       fontSize: 18,
-                      color: Colors.white,
+                      color: isMerchantSelected ? Colors.white : Colors.grey,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -184,56 +183,158 @@ class _MerchantPageState extends State<MerchantPage> {
   }
 }
 
-class MerchantSelectionPanel extends StatelessWidget {
+class MerchantSelectionPanel extends StatefulWidget {
   final List<dynamic> merchants;
   final Function(String) onMerchantSelected;
 
-  const MerchantSelectionPanel({super.key,
+  const MerchantSelectionPanel({
+    super.key,
     required this.merchants,
     required this.onMerchantSelected,
   });
 
   @override
+  State<MerchantSelectionPanel> createState() => _MerchantSelectionPanelState();
+}
+
+class _MerchantSelectionPanelState extends State<MerchantSelectionPanel> {
+  List<dynamic> filteredMerchants = [];
+  TextEditingController searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    filteredMerchants = widget.merchants;
+    searchController.addListener(_filterMerchants);
+  }
+
+  void _filterMerchants() {
+    final query = searchController.text.toLowerCase();
+    setState(() {
+      filteredMerchants = widget.merchants.where((merchant) {
+        final merchantName = merchant['merchant_name'].toLowerCase();
+        return merchantName.contains(query);
+      }).toList();
+    });
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ListView.builder(
-      itemCount: merchants.length,
-      itemBuilder: (context, index) {
-        final merchant = merchants[index]['merchant_name'];
-        return ListTile(
-          title: Text(merchant),
-          onTap: () {
-            onMerchantSelected(merchant);
-            Navigator.pop(context);
-          },
-        );
-      },
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: TextField(
+            controller: searchController,
+            decoration: InputDecoration(
+              hintText: 'Search merchants...',
+              prefixIcon: Icon(Icons.search),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            itemCount: filteredMerchants.length,
+            itemBuilder: (context, index) {
+              final merchant = filteredMerchants[index]['merchant_name'];
+              return ListTile(
+                title: Text(merchant),
+                onTap: () {
+                  widget.onMerchantSelected(merchant);
+                  Navigator.pop(context);
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
 
-class PosSelectionPanel extends StatelessWidget {
+class PosSelectionPanel extends StatefulWidget {
   final List<dynamic> posList;
   final Function(String) onPosSelected;
 
-  const PosSelectionPanel({super.key,
+  const PosSelectionPanel({
+    super.key,
     required this.posList,
     required this.onPosSelected,
   });
 
   @override
+  State<PosSelectionPanel> createState() => _PosSelectionPanelState();
+}
+
+class _PosSelectionPanelState extends State<PosSelectionPanel> {
+  List<dynamic> filteredPosList = [];
+  TextEditingController searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    filteredPosList = widget.posList;
+    searchController.addListener(_filterPosList);
+  }
+
+  void _filterPosList() {
+    final query = searchController.text.toLowerCase();
+    setState(() {
+      filteredPosList = widget.posList.where((pos) {
+        final posName = pos['pos_name'].toLowerCase();
+        return posName.contains(query);
+      }).toList();
+    });
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ListView.builder(
-      itemCount: posList.length,
-      itemBuilder: (context, index) {
-        final pos = posList[index]['pos_name'];
-        return ListTile(
-          title: Text(pos),
-          onTap: () {
-            onPosSelected(pos);
-            Navigator.pop(context);
-          },
-        );
-      },
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: TextField(
+            controller: searchController,
+            decoration: InputDecoration(
+              hintText: 'Search POS...',
+              prefixIcon: Icon(Icons.search),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            itemCount: filteredPosList.length,
+            itemBuilder: (context, index) {
+              final pos = filteredPosList[index]['pos_name'];
+              return ListTile(
+                title: Text(pos),
+                onTap: () {
+                  widget.onPosSelected(pos);
+                  Navigator.pop(context);
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
