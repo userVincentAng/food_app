@@ -30,6 +30,17 @@ class ViewCartPage extends StatelessWidget {
                 return Card(
                   margin: const EdgeInsets.all(8.0),
                   child: ListTile(
+                    leading: item['image'] != null
+                        ? Image.network(
+                            item['image'],
+                            width: 50,
+                            height: 50,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return const Icon(Icons.error, color: Colors.red);
+                            },
+                          )
+                        : const Icon(Icons.image, size: 50), // Fallback if no image URL
                     title: Text(item['name']),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
