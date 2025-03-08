@@ -12,6 +12,8 @@ class HomePage extends StatefulWidget {
 }
 
 class HomePageState extends State<HomePage> {
+  final FixedExtentScrollController _scrollController = FixedExtentScrollController();
+  int selectedCategoryIndex = 0;
   String menuTitle = 'Main Menu';
   String logo = '';
   List<Map<String, dynamic>> categories = [];
@@ -25,6 +27,9 @@ class HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _loadData();
+    Future.delayed(Duration.zero, () {
+      _scrollController.jumpToItem(100000 ~/ 2);
+    });
   }
 
   Future<void> _loadData() async {
@@ -82,10 +87,11 @@ class HomePageState extends State<HomePage> {
     });
   }
 
-  void _onCategorySelected(String category) {
+  void _onCategorySelected(String category, int index) {
     setState(() {
       selectedCategory = category;
       menuTitle = category; // Update menuTitle based on the selected category
+      selectedCategoryIndex = index % categories.length;
     });
   }
 
@@ -125,7 +131,7 @@ class HomePageState extends State<HomePage> {
               children: [
                 // Sidebar with Logo and Categories
                 Container(
-                  width: 90,
+                  width: 120,
                   color: Colors.white,
                   child: Column(
                     children: [
@@ -156,39 +162,56 @@ class HomePageState extends State<HomePage> {
                       Expanded(
                         child: isCategoriesLoading
                             ? const Center(child: CircularProgressIndicator())
-                            : ListView.builder(
-                          itemCount: categories.length,
-                          itemBuilder: (context, index) {
-                            final category = categories[index];
-                            return GestureDetector(
-                              onTap: () => _onCategorySelected(category['name']),
-                              child: Column(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 35,
-                                    backgroundColor: Colors.white,
-                                    child: ClipOval(
-                                      child: Image.network(
-                                        category['image'],
-                                        fit: BoxFit.contain,
-                                        width: 70,
-                                        height: 70,
-                                        errorBuilder: (context, error, stackTrace) {
-                                          return const Icon(Icons.error, color: Colors.red);
-                                        },
+                            : ListWheelScrollView.useDelegate(
+                          controller: _scrollController,
+                          itemExtent: 100,
+                          physics: FixedExtentScrollPhysics(),
+                          diameterRatio: 2.5,
+                          perspective: 0.0001,
+                          childDelegate:ListWheelChildBuilderDelegate(
+                            childCount: 100000,
+                            builder: (context, index) {
+                              final actualIndex = index % categories.length;
+                              final category = categories[index];
+                              return GestureDetector(
+                                onTap: (){
+                                  _onCategorySelected(category['name'], actualIndex);
+                                  _scrollController.animateToItem(
+                                      index,
+                                      duration: Duration(milliseconds: 500),
+                                      curve: Curves.easeInOut,
+                                  );
+                                },
+                                child: SizedBox(
+                                  height: 100,
+                                  child: Column(
+                                    children: [
+                                      Container(
+                                        color: Colors.white,
+                                        child: Image.network(
+                                          category['image'],
+                                          fit: BoxFit.contain,
+                                          width: 70,
+                                          height: 70,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            return const Icon(Icons.error, color: Colors.red);
+                                          },
+                                        ),
                                       ),
-                                    ),
+                                      Flexible(
+                                        child: Text(
+                                          category['name'],
+                                          style: const TextStyle(fontSize: 12, color: Colors.black),
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 2,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(height: 10),
-                                  Text(
-                                    category['name'],
-                                    style: const TextStyle(fontSize: 12, color: Colors.black),
-                                  ),
-                                  const SizedBox(height: 10),
-                                ],
-                              ),
-                            );
-                          },
+                                ),
+                              );
+                            }
+                          ),
                         ),
                       ),
                     ],
@@ -328,7 +351,7 @@ class HomePageState extends State<HomePage> {
                     children: [
                       ElevatedButton(
                         onPressed: () {
-                          Navigator.push(
+                          Navigator.pushReplacement(
                             context,
                             MaterialPageRoute(builder: (context) => const WelcomePage()),
                           );
@@ -368,10 +391,10 @@ class CustomizeOrderPanel extends StatefulWidget {
   });
 
   @override
-  _CustomizeOrderPanelState createState() => _CustomizeOrderPanelState();
+  CustomizeOrderPanelState createState() => CustomizeOrderPanelState();
 }
 
-class _CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
+class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
   String? selectedVariant;
   List<String> selectedModifiers = [];
 
