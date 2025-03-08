@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:food_app/color.dart';
+import 'package:food_app/pages/viewcart_page.dart';
 import 'package:food_app/pages/welcome_page.dart';
 import '../api_service.dart';
 import 'carousel_img.dart';
@@ -104,12 +105,14 @@ class HomePageState extends State<HomePage> {
 
   void _addToOrder(Map<String, dynamic> product) {
     setState(() {
-      orderItems.add(product);
+      final newItem = Map<String, dynamic>.from(product);
+      newItem['quantity'] = 1;
+      orderItems.add(newItem);
     });
   }
 
   double _calculateTotalAmount() {
-    return orderItems.fold(0, (sum, item) => sum + (item['price'] as num));
+    return orderItems.fold(0, (sum, item) => sum + (item['price'] as num) * (item['quantity'] as int));
   }
 
   @override
@@ -347,7 +350,28 @@ class HomePageState extends State<HomePage> {
                         const SizedBox(width: 20),
                         ElevatedButton(
                           onPressed: () {
-                            // Button action here
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ViewCartPage(
+                                  orderItems: orderItems,
+                                  onUpdateItem: (index, updatedItem) {
+                                    setState(() {
+                                      orderItems[index] = updatedItem;
+                                    });
+                                  },
+                                  onRemoveItem: (index) {
+                                    setState(() {
+                                      orderItems.removeAt(index);
+                                    });
+                                  },
+                                  onCheckout: () {
+                                    // Handle checkout logic here
+                                    print('Proceeding to checkout');
+                                  },
+                                ),
+                              ),
+                            );
                           },
                           child: Row(
                             mainAxisSize: MainAxisSize.min, // Keeps the button compact
