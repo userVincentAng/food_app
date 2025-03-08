@@ -168,18 +168,18 @@ class HomePageState extends State<HomePage> {
                           physics: FixedExtentScrollPhysics(),
                           diameterRatio: 2.5,
                           perspective: 0.0001,
-                          childDelegate:ListWheelChildBuilderDelegate(
-                            childCount: 100000,
+                          childDelegate: ListWheelChildBuilderDelegate(
+                            childCount: 100000, // Simulate infinite looping
                             builder: (context, index) {
                               final actualIndex = index % categories.length;
-                              final category = categories[index];
+                              final category = categories[actualIndex];
                               return GestureDetector(
-                                onTap: (){
+                                onTap: () {
                                   _onCategorySelected(category['name'], actualIndex);
                                   _scrollController.animateToItem(
-                                      index,
-                                      duration: Duration(milliseconds: 500),
-                                      curve: Curves.easeInOut,
+                                    index,
+                                    duration: const Duration(milliseconds: 500),
+                                    curve: Curves.easeInOut,
                                   );
                                 },
                                 child: SizedBox(
@@ -210,7 +210,7 @@ class HomePageState extends State<HomePage> {
                                   ),
                                 ),
                               );
-                            }
+                            },
                           ),
                         ),
                       ),
@@ -344,6 +344,21 @@ class HomePageState extends State<HomePage> {
                         Text('Total Amount: ₱${_calculateTotalAmount().toStringAsFixed(2)}'),
                         const SizedBox(width: 10),
                         Text('Total Items: ${orderItems.length}'),
+                        const SizedBox(width: 20),
+                        ElevatedButton(
+                          onPressed: () {
+                            // Button action here
+                          },
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min, // Keeps the button compact
+                            children: [
+                              const Text("view cart"),
+                              const SizedBox(width: 8), // Spacing between text and icon
+                              const Icon(Icons.shopping_cart), // Suffix icon
+                            ],
+                          ),
+                        )
+
                       ],
                     ),
                   ),
@@ -379,6 +394,7 @@ class HomePageState extends State<HomePage> {
     );
   }
 }
+
 
 class CustomizeOrderPanel extends StatefulWidget {
   final Map<String, dynamic> product;
