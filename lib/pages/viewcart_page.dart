@@ -16,11 +16,21 @@ class ViewCartPage extends StatelessWidget {
     required this.onCheckout,
   });
 
+  double _calculateTotalAmount() {
+    return orderItems.fold(0, (sum, item) => sum + (item['price'] as num) * (item['quantity'] as int));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('View Cart'),
+        title: Row(
+          children: [
+            const Icon(Icons.shopping_cart, size: 30,),
+            const SizedBox(width: 20),
+            const Text('View Cart'),
+          ],
+        ),
       ),
       body: Column(
         children: [
@@ -32,6 +42,17 @@ class ViewCartPage extends StatelessWidget {
                 return Card(
                   margin: const EdgeInsets.all(8.0),
                   child: ListTile(
+                    leading: item['image'] != null
+                        ? Image.network(
+                      item['image'],
+                      width: 50,
+                      height: 50,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Icon(Icons.error, color: Colors.red);
+                      },
+                    )
+                        : const Icon(Icons.image, size: 50), // Fallback if no image URL
                     title: Text(item['name']),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -78,8 +99,21 @@ class ViewCartPage extends StatelessWidget {
               },
             ),
           ),
+          Container(
+            height: 70,
+            width: double.infinity,
+            padding: const EdgeInsets.only(left: 20.0),
+            child: Row(
+              children: [
+                Text('Total Amount: ₱${_calculateTotalAmount().toStringAsFixed(2)}'),
+                const SizedBox(width: 10),
+                Text('|  Total Items: ${orderItems.length}'),
+                const SizedBox(width: 20),
+              ],
+            ),
+          ),
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.only(bottom: 20.0),
             child: ElevatedButton(
               onPressed: onCheckout,
               child: const Text('Proceed to Checkout'),
