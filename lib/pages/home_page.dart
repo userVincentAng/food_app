@@ -67,13 +67,22 @@ class HomePageState extends State<HomePage> {
   Future<void> _fetchProducts() async {
     try {
       final productsData = await ApiService.fetchProducts('1');
-      if (!mounted) return; // Check if the widget is still mounted before updating state
+      if (!mounted) return;
+
+      // Debugging: Print all category IDs
+      print("Category IDs: ${categories.map((cat) => cat['Id']).toList()}");
+
+      // Debugging: Print products with their CategoryId
+      for (var product in productsData) {
+        print("Product: ${product['ProductName']}, CategoryId: ${product['CategoryId']}");
+      }
+
       setState(() {
         products = productsData;
         isProductsLoading = false;
       });
     } catch (e) {
-      if (!mounted) return; // Prevent using context if not mounted
+      if (!mounted) return;
       setState(() {
         isProductsLoading = false;
       });
@@ -92,19 +101,39 @@ class HomePageState extends State<HomePage> {
     });
   }
 
-  void _onCategorySelected(String category, int index) {
-    setState(() {
-      selectedCategory = category;
-      menuTitle = category; // Update menuTitle based on the selected category
-      selectedCategoryIndex = index % categories.length;
-    });
+  void _onCategorySelected(String categoryId, int index) {
+    // Check if the selected categoryId exists in the categories list
+    final isValidCategory = categories.any((cat) => cat['Id'].toString() == categoryId);
+
+    if (isValidCategory) {
+      setState(() {
+        selectedCategory = categoryId; // Set selectedCategory to the category ID
+        menuTitle = categories.firstWhere((cat) => cat['Id'].toString() == categoryId)['CategoryName']; // Update menuTitle
+        selectedCategoryIndex = index % categories.length;
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Invalid category selected', style: const TextStyle(color: Colors.white)),
+          backgroundColor: AppColors.jet,
+        ),
+      );
+    }
   }
 
   List<dynamic> _getFilteredProducts() {
     if (selectedCategory.isEmpty) {
       return products; // Show all products if no category is selected
     }
-    return products.where((product) => product['CategoryId'] == selectedCategory).toList();
+
+    // Get all valid category IDs
+    final validCategoryIds = categories.map((cat) => cat['Id'].toString()).toList();
+
+    // Filter products based on selectedCategory and ensure CategoryId is valid
+    return products.where((product) {
+      final productCategoryId = product['CategoryId'].toString();
+      return productCategoryId == selectedCategory && validCategoryIds.contains(productCategoryId);
+    }).toList();
   }
 
   void _addToOrder(Map<String, dynamic> product) {
@@ -256,7 +285,7 @@ class HomePageState extends State<HomePage> {
                               final category = categories[actualIndex];
                               return GestureDetector(
                                 onTap: () {
-                                  _onCategorySelected(category['Id'], actualIndex);
+                                  _onCategorySelected(category['Id'].toString(), actualIndex); // Pass the category ID as a string
                                   _scrollController.animateToItem(
                                     index,
                                     duration: const Duration(milliseconds: 500),
