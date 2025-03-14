@@ -139,6 +139,10 @@ class HomePageState extends State<HomePage> {
   void _addToOrder(Map<String, dynamic> product) {
     print("Adding product to cart: $product");
 
+    // Use base product price if no variants exist
+    final basePrice = (product['Price'] as num?)?.toDouble() ?? 0.0;
+
+    // Check if the product has variants
     final selectedVariantId = product['selectedVariant'];
     final variants = product['itemVariants'] as List<dynamic>? ?? [];
     final selectedVariant = variants.isNotEmpty
@@ -148,29 +152,35 @@ class HomePageState extends State<HomePage> {
     )
         : null;
 
-    // Use base product price if no variants exist
-    final basePrice = (product['Price'] as num?)?.toDouble() ?? 0.0;
+    // Use the selected variant's price if available, otherwise use the base price
     final price = selectedVariant != null
         ? (selectedVariant['Price'] as num?)?.toDouble() ?? basePrice
         : basePrice;
 
+    // Calculate the total price of modifiers (if any)
     final modifiers = product['modifiers'] as List<Map<String, dynamic>>? ?? [];
     final totalModifierPrice = modifiers.fold<double>(0.0, (sum, modifier) {
       return sum + ((modifier['Price'] as num?)?.toDouble() ?? 0.0);
     });
 
+    // Calculate the final price (base price + variant price + modifiers)
+    final finalPrice = price + totalModifierPrice;
+
     setState(() {
+      // Check if the product already exists in the cart
       int existingIndex = orderItems.indexWhere((item) =>
       item['selectedVariant'] == selectedVariantId &&
           item['modifiers'] == modifiers);
 
       if (existingIndex != -1) {
+        // If the product already exists, increment the quantity
         orderItems[existingIndex]['quantity'] += 1;
         print("Product already in cart. Incremented quantity.");
       } else {
+        // If the product is new, add it to the cart
         final newItem = {
           ...product,
-          'Price': price + totalModifierPrice, // Ensure valid price
+          'Price': finalPrice, // Use the final calculated price
           'quantity': 1,
           'notes': product['notes'],
         };
