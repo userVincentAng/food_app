@@ -5,10 +5,17 @@ import 'constants.dart';
 
 class ApiService {
   static Future<List<dynamic>> fetchCategories() async {
-    final response = await http.get(Uri.parse(ApiEndpoints.categoriesUrl));
-    if (response.statusCode == 200) {
+    final response = await http.post(Uri.parse(ApiEndpoints.categoriesUrl),
+      headers: <String, String>{
+        'Content-Type': 'application/json; charset=UTF-8',
+      },
+      body: jsonEncode(<String, String>{
+        'storeid': '1',
+      })
+    );
+    if (response.statusCode == 201) {
       final data = json.decode(response.body);
-      return data['productCategories'];
+      return data['Categories'];
     } else {
       throw Exception('Failed to load categories');
     }

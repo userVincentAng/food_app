@@ -45,9 +45,8 @@ class HomePageState extends State<HomePage> {
       if (!mounted) return; // Check if the widget is still mounted before updating state
       setState(() {
         categories = categoriesData.map((category) => {
-          'id': category['id'],
-          'name': category['name'],
-          'image': category['image'],
+          'Id': category['Id'],
+          'CategoryName': category['CategoryName'],
         }).toList();
         isCategoriesLoading = false;
       });
@@ -105,7 +104,7 @@ class HomePageState extends State<HomePage> {
     if (selectedCategory.isEmpty) {
       return products; // Show all products if no category is selected
     }
-    return products.where((product) => product['category'] == selectedCategory).toList();
+    return products.where((product) => product['CategoryId'] == selectedCategory).toList();
   }
 
   void _addToOrder(Map<String, dynamic> product) {
@@ -158,9 +157,6 @@ class HomePageState extends State<HomePage> {
     try {
       final itemDetails = await ApiService.fetchItemDetails('1', itemId);
       if (!mounted) return;
-
-      // Log the item details
-      print("Item details fetched: $itemDetails");
 
       final result = await showModalBottomSheet(
         context: context,
@@ -260,7 +256,7 @@ class HomePageState extends State<HomePage> {
                               final category = categories[actualIndex];
                               return GestureDetector(
                                 onTap: () {
-                                  _onCategorySelected(category['name'], actualIndex);
+                                  _onCategorySelected(category['Id'], actualIndex);
                                   _scrollController.animateToItem(
                                     index,
                                     duration: const Duration(milliseconds: 500),
@@ -271,21 +267,9 @@ class HomePageState extends State<HomePage> {
                                   height: 100, // 15% of screen height
                                   child: Column(
                                     children: [
-                                      Container(
-                                        color: Colors.white,
-                                        child: Image.network(
-                                          category['image'],
-                                          fit: BoxFit.contain,
-                                          width: 70, // 15% of screen width
-                                          height: 70, // 15% of screen width
-                                          errorBuilder: (context, error, stackTrace) {
-                                            return const Icon(Icons.error, color: Colors.red);
-                                          },
-                                        ),
-                                      ),
                                       Flexible(
                                         child: Text(
-                                          category['name'],
+                                          category['CategoryName'],
                                           style: const TextStyle(fontSize: 12, color: Colors.black),
                                           overflow: TextOverflow.ellipsis,
                                           maxLines: 2,
