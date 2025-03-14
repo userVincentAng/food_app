@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:food_app/color.dart';
-import 'package:food_app/pages/viewcart_page.dart';
 import 'package:food_app/pages/welcome_page.dart';
+
 import '../api_service.dart';
+import '../color.dart';
 import 'carousel_img.dart';
+import 'order_summary.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -41,6 +42,7 @@ class HomePageState extends State<HomePage> {
   Future<void> _fetchCategories() async {
     try {
       final categoriesData = await ApiService.fetchCategories();
+      if (!mounted) return; // Check if the widget is still mounted before updating state
       setState(() {
         categories = categoriesData.map((category) => {
           'id': category['id'],
@@ -50,6 +52,7 @@ class HomePageState extends State<HomePage> {
         isCategoriesLoading = false;
       });
     } catch (e) {
+      if (!mounted) return; // Prevent using context if not mounted
       setState(() {
         isCategoriesLoading = false;
       });
@@ -64,12 +67,14 @@ class HomePageState extends State<HomePage> {
 
   Future<void> _fetchProducts() async {
     try {
-      final productsData = await ApiService.fetchProducts();
+      final productsData = await ApiService.fetchProducts('1');
+      if (!mounted) return; // Check if the widget is still mounted before updating state
       setState(() {
         products = productsData;
         isProductsLoading = false;
       });
     } catch (e) {
+      if (!mounted) return; // Prevent using context if not mounted
       setState(() {
         isProductsLoading = false;
       });
@@ -104,20 +109,97 @@ class HomePageState extends State<HomePage> {
   }
 
   void _addToOrder(Map<String, dynamic> product) {
+    print("Adding product to cart: $product");
+
+    final selectedVariantId = product['selectedVariant'];
+    final variants = product['itemVariants'] as List<dynamic>? ?? [];
+    final selectedVariant = variants.isNotEmpty
+        ? variants.firstWhere(
+          (variant) => variant['SKUId'] == selectedVariantId,
+      orElse: () => null,
+    )
+        : null;
+
+    // Use base product price if no variants exist
+    final basePrice = (product['Price'] as num?)?.toDouble() ?? 0.0;
+    final price = selectedVariant != null
+        ? (selectedVariant['Price'] as num?)?.toDouble() ?? basePrice
+        : basePrice;
+
+    final modifiers = product['modifiers'] as List<Map<String, dynamic>>? ?? [];
+    final totalModifierPrice = modifiers.fold<double>(0.0, (sum, modifier) {
+      return sum + ((modifier['Price'] as num?)?.toDouble() ?? 0.0);
+    });
+
     setState(() {
-      final newItem = Map<String, dynamic>.from(product);
-      newItem['quantity'] = 1;
-      orderItems.add(newItem);
+      int existingIndex = orderItems.indexWhere((item) =>
+      item['selectedVariant'] == selectedVariantId &&
+          item['modifiers'] == modifiers);
+
+      if (existingIndex != -1) {
+        orderItems[existingIndex]['quantity'] += 1;
+        print("Product already in cart. Incremented quantity.");
+      } else {
+        final newItem = {
+          ...product,
+          'Price': price + totalModifierPrice, // Ensure valid price
+          'quantity': 1,
+          'notes': product['notes'],
+        };
+        orderItems.add(newItem);
+        print("New product added to cart.");
+      }
+
+      print("Updated cart: $orderItems");
     });
   }
 
+  void _showCustomizationPanel(BuildContext context, String itemId) async {
+    try {
+      final itemDetails = await ApiService.fetchItemDetails('1', itemId);
+      if (!mounted) return;
+
+      // Log the item details
+      print("Item details fetched: $itemDetails");
+
+      final result = await showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) => CustomizeOrderPanel(itemDetails: itemDetails),
+      );
+
+      if (result != null) {
+        // Log the customization result
+        print("Customization result: $result");
+
+        // Add the product to the cart with customization data
+        _addToOrder({
+          ...itemDetails, // Include all item details
+          'Price': itemDetails['Price'] ?? 0.0, // Ensure the Price field is included
+          'selectedVariant': result['variantId'] ?? null, // Add selected variant
+          'modifiers': result['modifiers'], // Add selected modifiers
+          'notes': result['notes'], // Include notes
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading item details: $e')),
+      );
+    }
+  }
+
   double _calculateTotalAmount() {
-    return orderItems.fold(0, (sum, item) => sum + (item['price'] as num) * (item['quantity'] as int));
+    return orderItems.fold(0.0, (double sum, item) {
+      final price = (item['Price'] as num? ?? 0).toDouble(); // Use double
+      final quantity = item['quantity'] as int? ?? 0; // Quantity is always an int
+      return sum + (price * quantity);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final filteredProducts = _getFilteredProducts();
+    final screenWidth = MediaQuery.of(context).size.width;
 
     return Scaffold(
       body: Column(
@@ -134,22 +216,22 @@ class HomePageState extends State<HomePage> {
               children: [
                 // Sidebar with Logo and Categories
                 Container(
-                  width: 120,
+                  width: 120, // 20% of screen width
                   color: Colors.white,
                   child: Column(
                     children: [
                       const SizedBox(height: 10),
                       // Logo
                       CircleAvatar(
-                        radius: 35,
+                        radius: 30, // 7.5% of screen width
                         backgroundColor: Colors.white,
                         child: logo.isNotEmpty
                             ? ClipOval(
                           child: Image.network(
                             logo,
                             fit: BoxFit.contain,
-                            width: 70,
-                            height: 70,
+                            width: screenWidth * 0.10, // 15% of screen width
+                            height: screenWidth * 0.10, // 15% of screen width
                             errorBuilder: (context, error, stackTrace) {
                               return const Icon(Icons.error, color: Colors.red);
                             },
@@ -167,7 +249,7 @@ class HomePageState extends State<HomePage> {
                             ? const Center(child: CircularProgressIndicator())
                             : ListWheelScrollView.useDelegate(
                           controller: _scrollController,
-                          itemExtent: 100,
+                          itemExtent: 100, // 15% of screen height
                           physics: FixedExtentScrollPhysics(),
                           diameterRatio: 2.5,
                           perspective: 0.0001,
@@ -186,7 +268,7 @@ class HomePageState extends State<HomePage> {
                                   );
                                 },
                                 child: SizedBox(
-                                  height: 100,
+                                  height: 100, // 15% of screen height
                                   child: Column(
                                     children: [
                                       Container(
@@ -194,8 +276,8 @@ class HomePageState extends State<HomePage> {
                                         child: Image.network(
                                           category['image'],
                                           fit: BoxFit.contain,
-                                          width: 70,
-                                          height: 70,
+                                          width: 70, // 15% of screen width
+                                          height: 70, // 15% of screen width
                                           errorBuilder: (context, error, stackTrace) {
                                             return const Icon(Icons.error, color: Colors.red);
                                           },
@@ -246,8 +328,8 @@ class HomePageState extends State<HomePage> {
                               ? const Center(child: CircularProgressIndicator())
                               : GridView.builder(
                             padding: const EdgeInsets.all(10),
-                            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: 150, // Maximum width for each card
+                            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 150, // 40% of screen width
                               crossAxisSpacing: 10,
                               mainAxisSpacing: 10,
                               childAspectRatio: 0.8, // Adjust the aspect ratio as needed
@@ -256,33 +338,25 @@ class HomePageState extends State<HomePage> {
                             itemBuilder: (context, index) {
                               final product = filteredProducts[index];
                               return GestureDetector(
-                                onTap: () {
-                                  showModalBottomSheet(
-                                    context: context,
-                                    isScrollControlled: true, // Allows the sheet to take up more space
-                                    builder: (context) {
-                                      return SizedBox(
-                                        height: MediaQuery.of(context).size.height * 0.75, // 75% of screen height
-                                        child: CustomizeOrderPanel(
-                                          product: product,
-                                          onAddToOrder: _addToOrder,
-                                        ),
-                                      );
-                                    },
-                                  );
-                                },
+                                onTap:
+                                    () => _showCustomizationPanel(
+                                  context,
+                                  product['Id'].toString(),
+                                ),
                                 child: Card(
                                   elevation: 2,
                                   child: Column(
                                     children: [
                                       Expanded(
-                                        child: Image.network(
-                                          product['image'],
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (context, error, stackTrace) {
-                                            return const Icon(Icons.error, color: Colors.red);
-                                          },
-                                        ),
+                                          child: Image.network(
+                                            product['ImgUrl'] != null && product['ImgUrl'].isNotEmpty
+                                                ? 'https://sellercenter.shoppazing.com/api/${product['ImgUrl']}'
+                                                : 'https://via.placeholder.com/150', // Placeholder image
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (context, error, stackTrace) {
+                                              return const Icon(Icons.broken_image, color: Colors.red);
+                                            },
+                                          )
                                       ),
                                       Padding(
                                         padding: const EdgeInsets.all(8.0),
@@ -290,14 +364,14 @@ class HomePageState extends State<HomePage> {
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              product['name'],
+                                              product['ProductName'],
                                               style: const TextStyle(
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.bold,
                                               ),
                                             ),
                                             Text(
-                                              '₱${product['price'].toString()}',
+                                              '₱${product['Price'].toString()}',
                                               style: const TextStyle(
                                                 fontSize: 12,
                                                 color: Colors.green,
@@ -323,94 +397,19 @@ class HomePageState extends State<HomePage> {
           // Order Summary Section
           Align(
             alignment: Alignment.bottomCenter,
-            child: Container(
-              padding: const EdgeInsets.only(left: 20, right: 20, top: 10),
-              height: 150,
-              width: double.infinity,
-              child: Column(
-                children: [
-                  const Align(
-                    alignment: Alignment.topLeft,
-                    child: Text(
-                      'Order Summary',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  SizedBox(
-                    height: 70,
-                    width: double.infinity,
-                    child: Row(
-                      children: [
-                        Text('Total Amount: ₱${_calculateTotalAmount().toStringAsFixed(2)}'),
-                        const SizedBox(width: 10),
-                        Text('Total Items: ${orderItems.length}'),
-                        const SizedBox(width: 20),
-                        ElevatedButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ViewCartPage(
-                                  orderItems: orderItems,
-                                  onUpdateItem: (index, updatedItem) {
-                                    setState(() {
-                                      orderItems[index] = updatedItem;
-                                    });
-                                  },
-                                  onRemoveItem: (index) {
-                                    setState(() {
-                                      orderItems.removeAt(index);
-                                    });
-                                  },
-                                  onCheckout: () {
-                                    // Handle checkout logic here
-                                    print('Proceeding to checkout');
-                                  },
-                                ),
-                              ),
-                            );
-                          },
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min, // Keeps the button compact
-                            children: [
-                              const Text("view cart"),
-                              const SizedBox(width: 8), // Spacing between text and icon
-                              const Icon(Icons.shopping_cart), // Suffix icon
-                            ],
-                          ),
-                        )
-
-                      ],
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      ElevatedButton(
-                        onPressed: () {
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(builder: (context) => const WelcomePage()),
-                          );
-                        },
-                        child: const Text('Cancel Order'),
-                      ),
-                      const SizedBox(width: 20),
-                      ElevatedButton(
-                        onPressed: () {
-                          // Handle order confirmation
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.airforceBlue,
-                        ),
-                        child: const Text('Confirm', style: TextStyle(color: Colors.white)),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+            child: OrderSummaryPanel(
+              totalAmount: _calculateTotalAmount(),
+              totalItems: orderItems.length,
+              orderItems: orderItems, // Pass the orderItems list
+              onCancel: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => WelcomePage()),
+                );
+              },
+              onDone: () {
+                print("Order Completed");
+              },
             ),
           ),
         ],
@@ -419,160 +418,144 @@ class HomePageState extends State<HomePage> {
   }
 }
 
-
 class CustomizeOrderPanel extends StatefulWidget {
-  final Map<String, dynamic> product;
-  final Function(Map<String, dynamic>) onAddToOrder;
+  final Map<String, dynamic> itemDetails;
 
-  const CustomizeOrderPanel({
-    required this.product,
-    required this.onAddToOrder,
-    super.key,
-  });
+  const CustomizeOrderPanel({super.key, required this.itemDetails});
 
   @override
   CustomizeOrderPanelState createState() => CustomizeOrderPanelState();
 }
 
 class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
-  String? selectedVariant;
-  List<String> selectedModifiers = [];
+  int? selectedVariant; // Store SKUId
+  Map<int, Map<String, dynamic>> selectedModifiers = {}; // Track selected modifiers with their details
+  final TextEditingController _notesController = TextEditingController(); // Controller for notes
 
-  Map<String, List<String>> categoryModifiers = {
-    'Sandwiches': ['Mayo Sauce', 'BBQ Sauce', 'Mustard', 'Ketchup'],
-    'Coffee': ['Extra Shot', 'Cream', 'Sugar', 'Honey'],
-    'Meals': ['Extra Rice', 'Extra Sauce', 'No Spice', 'Extra Spice'],
-    'Drinks': ['No Ice', 'Less Ice', 'Extra Ice'],
-    'Pasta': ['Extra Cheese', 'Extra Sauce', 'No Meat', 'Extra Meat'],
-  };
-
-  Map<String, List<String>> categoryVariants = {
-    'Coffee': ['Small', 'Medium', 'Large'],
-    'Meals': ['Regular', 'Large'],
-    'Drinks': ['330ml', '500ml', '1L'],
-    'Pasta': ['Half Portion', 'Full Portion'],
-  };
+  @override
+  void dispose() {
+    _notesController.dispose(); // Dispose the controller
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final hasVariant = widget.product['hasVariant'];
-    final hasModifiers = widget.product['hasModifiers'];
-    final category = widget.product['category'];
+    var variants = widget.itemDetails['itemVariants'] ?? [];
+    var modifiers = widget.itemDetails['itemModifiers'] ?? [];
 
-    return Container(
+    return Padding(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Product Name
-          Text(
-            widget.product['name'],
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 10),
-          // Product Image
-          Image.network(
-            widget.product['image'],
-            height: 100,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              return const Icon(Icons.error, color: Colors.red);
-            },
-          ),
-          const SizedBox(height: 10),
-          // Variant Selection (if applicable)
-          if (hasVariant) ...[
-            const Text(
-              'Choose Size:',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Variants Selection
+            if (variants.isNotEmpty) ...[
+              const Text(
+                "Select Size",
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
-            ),
-            DropdownButton<String>(
-              value: selectedVariant,
-              hint: const Text('Select a size'),
-              onChanged: (String? newValue) {
-                setState(() {
-                  selectedVariant = newValue;
-                });
-              },
-              items: categoryVariants[category]?.map<DropdownMenuItem<String>>((String value) {
-                return DropdownMenuItem<String>(
-                  value: value,
-                  child: Text(value),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 10),
-          ],
-          // Modifiers Selection (if applicable)
-          if (hasModifiers) ...[
-            const Text(
-              'Add Modifiers:',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            Wrap(
-              children: categoryModifiers[category]?.map((modifier) {
-                return FilterChip(
-                  label: Text(modifier),
-                  selected: selectedModifiers.contains(modifier),
-                  onSelected: (bool selected) {
-                    setState(() {
-                      if (selected) {
-                        selectedModifiers.add(modifier);
-                      } else {
-                        selectedModifiers.remove(modifier);
-                      }
-                    });
+              ...variants.map<Widget>((variant) {
+                return RadioListTile<int>(
+                  title: Text(
+                    "${variant['CombiName']} - ₱${variant['Price']}",
+                  ),
+                  value: variant['SKUId'], // Store SKUId instead of name
+                  groupValue: selectedVariant,
+                  onChanged: (value) {
+                    setState(() => selectedVariant = value);
                   },
                 );
-              }).toList() ?? [],
+              }).toList(),
+            ],
+
+            // Modifiers Selection
+            if (modifiers.isNotEmpty) ...[
+              const Text(
+                "Add Extras",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              ...modifiers
+                  .map<Widget>(
+                    (modifier) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      modifier['ModifierName'] ?? "Extras",
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    ...modifier['ModifierOptions']
+                        .map<Widget>(
+                          (option) => CheckboxListTile(
+                        title: Text(
+                          "${option['Name']} - ₱${option['Price']}",
+                        ),
+                        value: selectedModifiers.containsKey(option['Id']),
+                        onChanged: (bool? value) {
+                          setState(() {
+                            if (value == true) {
+                              selectedModifiers[option['Id']] = option; // Add modifier details
+                            } else {
+                              selectedModifiers.remove(option['Id']); // Remove modifier
+                            }
+                          });
+                        },
+                      ),
+                    )
+                        .toList(),
+                  ],
+                ),
+              )
+                  .toList(),
+            ],
+
+            // Add Notes Section
+            const SizedBox(height: 16),
+            const Text(
+              "Add Notes",
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 10),
+            TextFormField(
+              controller: _notesController,
+              decoration: const InputDecoration(
+                hintText: "e.g., No ice, less sugar, etc.",
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3, // Allow multiple lines for notes
+            ),
+
+            // Confirm Button
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                // Check if there are variants and none are selected
+                if (variants.isNotEmpty && selectedVariant == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please select a size!')),
+                  );
+                  return;
+                }
+
+                // Include modifier prices in the result
+                final selectedExtras = selectedModifiers.values.toList();
+
+                // Return the selected variant, modifiers, and notes
+                Navigator.pop(context, {
+                  'variantId': selectedVariant,
+                  'modifiers': selectedExtras, // Include modifier details
+                  'notes': _notesController.text.trim(), // Include notes
+                });
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+              child: const Text(
+                "Add to Cart",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
           ],
-          // Spacer to push the remaining content to the bottom
-          const Spacer(),
-          // Add Notes
-          const Text(
-            'Add Notes:',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          TextField(
-            decoration: const InputDecoration(
-              hintText: 'Enter your notes...',
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (value) {
-              widget.product['notes'] = value;
-            },
-          ),
-          const SizedBox(height: 20),
-          // Add to Order Button
-          ElevatedButton(
-            onPressed: () {
-              widget.product['variant'] = selectedVariant;
-              widget.product['modifiers'] = selectedModifiers;
-              widget.onAddToOrder(widget.product);
-              Navigator.pop(context);
-            },
-            child: const Text('Add to Order'),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
+

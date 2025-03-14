@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'home_page.dart';
-
 class ViewCartPage extends StatelessWidget {
   final List<Map<String, dynamic>> orderItems;
   final Function(int index, Map<String, dynamic> updatedItem) onUpdateItem;
@@ -125,18 +123,18 @@ class ViewCartPage extends StatelessWidget {
   }
 
   void _editItem(BuildContext context, Map<String, dynamic> item, int index) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        return CustomizeOrderPanel(
-          product: item,
-          onAddToOrder: (updatedItem) {
-            onUpdateItem(index, updatedItem);
-            Navigator.pop(context);
-          },
-        );
-      },
-    );
+  //   showModalBottomSheet(
+  //     context: context,
+  //     isScrollControlled: true,
+  //     builder: (context) {
+  //       // return CustomizeOrderPanel(
+  //       //   product: item,
+  //       //   onAddToOrder: (updatedItem) {
+  //       //     onUpdateItem(index, updatedItem);
+  //       //     Navigator.pop(context);
+  //       //   },
+  //       // );
+  //     },
+  //   );
   }
 }
