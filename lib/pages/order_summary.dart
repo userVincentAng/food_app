@@ -64,7 +64,7 @@ class OrderSummaryPanel extends StatelessWidget {
                   onPressed: () {
                     // Navigate to cart screen
                   },
-                  child: Icon(Icons.shopping_cart, color: AppColors.airforceBlue, size: 25,),
+                  child: Icon(Icons.shopping_cart, color: AppColors.airforceBlue, size: 25),
                 ),
               ],
             ),

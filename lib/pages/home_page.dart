@@ -3,7 +3,9 @@ import 'package:food_app/pages/welcome_page.dart';
 
 import '../api_service.dart';
 import '../color.dart';
+import '../product_card.dart';
 import 'carousel_img.dart';
+import 'customize_order.dart';
 import 'order_summary.dart';
 
 class HomePage extends StatefulWidget {
@@ -69,14 +71,6 @@ class HomePageState extends State<HomePage> {
       final productsData = await ApiService.fetchProducts('1');
       if (!mounted) return;
 
-      // Debugging: Print all category IDs
-      print("Category IDs: ${categories.map((cat) => cat['Id']).toList()}");
-
-      // Debugging: Print products with their CategoryId
-      for (var product in productsData) {
-        print("Product: ${product['ProductName']}, CategoryId: ${product['CategoryId']}");
-      }
-
       setState(() {
         products = productsData;
         isProductsLoading = false;
@@ -137,12 +131,10 @@ class HomePageState extends State<HomePage> {
   }
 
   void _addToOrder(Map<String, dynamic> product) {
-    print("Adding product to cart: $product");
-
-    // Use base product price if no variants exist
+    // Ensure the base price is always included
     final basePrice = (product['Price'] as num?)?.toDouble() ?? 0.0;
 
-    // Check if the product has variants
+    // Check if the product has variants (from fetchItemDetails)
     final selectedVariantId = product['selectedVariant'];
     final variants = product['itemVariants'] as List<dynamic>? ?? [];
     final selectedVariant = variants.isNotEmpty
@@ -153,7 +145,7 @@ class HomePageState extends State<HomePage> {
         : null;
 
     // Use the selected variant's price if available, otherwise use the base price
-    final price = selectedVariant != null
+    final variantPrice = selectedVariant != null
         ? (selectedVariant['Price'] as num?)?.toDouble() ?? basePrice
         : basePrice;
 
@@ -164,18 +156,18 @@ class HomePageState extends State<HomePage> {
     });
 
     // Calculate the final price (base price + variant price + modifiers)
-    final finalPrice = price + totalModifierPrice;
+    final finalPrice = variantPrice + totalModifierPrice;
 
     setState(() {
       // Check if the product already exists in the cart
       int existingIndex = orderItems.indexWhere((item) =>
-      item['selectedVariant'] == selectedVariantId &&
-          item['modifiers'] == modifiers);
+      item['Id'] == product['Id'] && // Match by product ID
+          item['selectedVariant'] == selectedVariantId && // Match by selected variant
+          item['modifiers'] == modifiers); // Match by modifiers
 
       if (existingIndex != -1) {
         // If the product already exists, increment the quantity
         orderItems[existingIndex]['quantity'] += 1;
-        print("Product already in cart. Incremented quantity.");
       } else {
         // If the product is new, add it to the cart
         final newItem = {
@@ -185,42 +177,8 @@ class HomePageState extends State<HomePage> {
           'notes': product['notes'],
         };
         orderItems.add(newItem);
-        print("New product added to cart.");
       }
-
-      print("Updated cart: $orderItems");
     });
-  }
-
-  void _showCustomizationPanel(BuildContext context, String itemId) async {
-    try {
-      final itemDetails = await ApiService.fetchItemDetails('1', itemId);
-      if (!mounted) return;
-
-      final result = await showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        builder: (context) => CustomizeOrderPanel(itemDetails: itemDetails),
-      );
-
-      if (result != null) {
-        // Log the customization result
-        print("Customization result: $result");
-
-        // Add the product to the cart with customization data
-        _addToOrder({
-          ...itemDetails, // Include all item details
-          'Price': itemDetails['Price'] ?? 0.0, // Ensure the Price field is included
-          'selectedVariant': result['variantId'] ?? null, // Add selected variant
-          'modifiers': result['modifiers'], // Add selected modifiers
-          'notes': result['notes'], // Include notes
-        });
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading item details: $e')),
-      );
-    }
   }
 
   double _calculateTotalAmount() {
@@ -347,68 +305,60 @@ class HomePageState extends State<HomePage> {
                         ),
                         // Products GridView
                         Expanded(
-                          child: isProductsLoading
-                              ? const Center(child: CircularProgressIndicator())
-                              : GridView.builder(
-                            padding: const EdgeInsets.all(10),
-                            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: 150, // 40% of screen width
-                              crossAxisSpacing: 10,
-                              mainAxisSpacing: 10,
-                              childAspectRatio: 0.8, // Adjust the aspect ratio as needed
-                            ),
-                            itemCount: filteredProducts.length,
-                            itemBuilder: (context, index) {
-                              final product = filteredProducts[index];
-                              return GestureDetector(
-                                onTap:
-                                    () => _showCustomizationPanel(
-                                  context,
-                                  product['Id'].toString(),
-                                ),
-                                child: Card(
-                                  elevation: 2,
-                                  child: Column(
-                                    children: [
-                                      Expanded(
-                                          child: Image.network(
-                                            product['ImgUrl'] != null && product['ImgUrl'].isNotEmpty
-                                                ? 'https://sellercenter.shoppazing.com/api/${product['ImgUrl']}'
-                                                : 'https://via.placeholder.com/150', // Placeholder image
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (context, error, stackTrace) {
-                                              return const Icon(Icons.broken_image, color: Colors.red);
-                                            },
-                                          )
-                                      ),
-                                      Padding(
-                                        padding: const EdgeInsets.all(8.0),
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              product['ProductName'],
-                                              style: const TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                            Text(
-                                              '₱${product['Price'].toString()}',
-                                              style: const TextStyle(
-                                                fontSize: 12,
-                                                color: Colors.green,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                            child: isProductsLoading
+                                ? const Center(child: CircularProgressIndicator())
+                                : GridView.builder(
+                              padding: const EdgeInsets.all(10),
+                              gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                                maxCrossAxisExtent: 150,
+                                crossAxisSpacing: 10,
+                                mainAxisSpacing: 10,
+                                childAspectRatio: 0.8,
+                              ),
+                              itemCount: filteredProducts.length,
+                              itemBuilder: (context, index) {
+                                final product = filteredProducts[index];
+                                return ProductCard(
+                                  product: product,
+                                  onTap: (itemId) async {
+                                    try {
+                                      // Fetch item details
+                                      final itemDetails = await ApiService.fetchItemDetails('1', itemId);
+
+                                      if (!mounted) return;
+
+                                      // Debugging: Print itemDetails to verify the structure
+                                      print('Item Details: $itemDetails');
+                                      print('Products: $product');
+
+                                      // Show the customization panel
+                                      final result = await showModalBottomSheet(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        builder: (context) => CustomizeOrderPanel(itemDetails: itemDetails, product: product),
+                                      );
+
+                                      if (result != null) {
+                                        // Log the customization result
+
+                                        // Add the product to the cart with customization data
+                                        _addToOrder({
+                                          ...itemDetails, // Include all item details
+                                          'Price': product['Price'] ?? itemDetails['Price'], // Use the passed price or fallback to basePrice
+                                          'selectedVariant': result['variantId'], // Add selected variant
+                                          'modifiers': result['modifiers'], // Add selected modifiers
+                                          'notes': result['notes'], // Include notes
+                                        });
+                                      }
+                                    } catch (e) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Error loading item details: $e')),
+                                      );
+                                    }
+                                  },
+                                );
+                              },
+                            )
                         ),
                       ],
                     ),
@@ -431,7 +381,6 @@ class HomePageState extends State<HomePage> {
                 );
               },
               onDone: () {
-                print("Order Completed");
               },
             ),
           ),
@@ -441,144 +390,5 @@ class HomePageState extends State<HomePage> {
   }
 }
 
-class CustomizeOrderPanel extends StatefulWidget {
-  final Map<String, dynamic> itemDetails;
 
-  const CustomizeOrderPanel({super.key, required this.itemDetails});
-
-  @override
-  CustomizeOrderPanelState createState() => CustomizeOrderPanelState();
-}
-
-class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
-  int? selectedVariant; // Store SKUId
-  Map<int, Map<String, dynamic>> selectedModifiers = {}; // Track selected modifiers with their details
-  final TextEditingController _notesController = TextEditingController(); // Controller for notes
-
-  @override
-  void dispose() {
-    _notesController.dispose(); // Dispose the controller
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    var variants = widget.itemDetails['itemVariants'] ?? [];
-    var modifiers = widget.itemDetails['itemModifiers'] ?? [];
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Variants Selection
-            if (variants.isNotEmpty) ...[
-              const Text(
-                "Select Size",
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              ...variants.map<Widget>((variant) {
-                return RadioListTile<int>(
-                  title: Text(
-                    "${variant['CombiName']} - ₱${variant['Price']}",
-                  ),
-                  value: variant['SKUId'], // Store SKUId instead of name
-                  groupValue: selectedVariant,
-                  onChanged: (value) {
-                    setState(() => selectedVariant = value);
-                  },
-                );
-              }).toList(),
-            ],
-
-            // Modifiers Selection
-            if (modifiers.isNotEmpty) ...[
-              const Text(
-                "Add Extras",
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              ...modifiers
-                  .map<Widget>(
-                    (modifier) => Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      modifier['ModifierName'] ?? "Extras",
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    ...modifier['ModifierOptions']
-                        .map<Widget>(
-                          (option) => CheckboxListTile(
-                        title: Text(
-                          "${option['Name']} - ₱${option['Price']}",
-                        ),
-                        value: selectedModifiers.containsKey(option['Id']),
-                        onChanged: (bool? value) {
-                          setState(() {
-                            if (value == true) {
-                              selectedModifiers[option['Id']] = option; // Add modifier details
-                            } else {
-                              selectedModifiers.remove(option['Id']); // Remove modifier
-                            }
-                          });
-                        },
-                      ),
-                    )
-                        .toList(),
-                  ],
-                ),
-              )
-                  .toList(),
-            ],
-
-            // Add Notes Section
-            const SizedBox(height: 16),
-            const Text(
-              "Add Notes",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            TextFormField(
-              controller: _notesController,
-              decoration: const InputDecoration(
-                hintText: "e.g., No ice, less sugar, etc.",
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3, // Allow multiple lines for notes
-            ),
-
-            // Confirm Button
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () {
-                // Check if there are variants and none are selected
-                if (variants.isNotEmpty && selectedVariant == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please select a size!')),
-                  );
-                  return;
-                }
-
-                // Include modifier prices in the result
-                final selectedExtras = selectedModifiers.values.toList();
-
-                // Return the selected variant, modifiers, and notes
-                Navigator.pop(context, {
-                  'variantId': selectedVariant,
-                  'modifiers': selectedExtras, // Include modifier details
-                  'notes': _notesController.text.trim(), // Include notes
-                });
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-              child: const Text(
-                "Add to Cart",
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
