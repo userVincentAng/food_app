@@ -1,211 +1,112 @@
-import 'package:flutter/material.dart';
-import 'package:collection/collection.dart';
-import '../color.dart';
-
-class ViewCartPage extends StatefulWidget {
+class OrderSummaryPanel extends StatelessWidget {
+  final double totalAmount;
+  final int totalItems;
   final List<Map<String, dynamic>> orderItems;
-  final Function(List<Map<String, dynamic>>) onOrderUpdated;
+  final VoidCallback onCancel;
+  final VoidCallback onDone;
+  final Function(List<Map<String, dynamic>>) onOrderUpdated; // Add this callback
 
-  const ViewCartPage({
+  const OrderSummaryPanel({
     super.key,
+    required this.totalAmount,
+    required this.totalItems,
     required this.orderItems,
-    required this.onOrderUpdated,
+    required this.onCancel,
+    required this.onDone,
+    required this.onOrderUpdated, // Add this parameter
   });
 
   @override
-  ViewCartPageState createState() => ViewCartPageState();
-}
-
-class ViewCartPageState extends State<ViewCartPage> {
-  late List<Map<String, dynamic>> orderItems;
-
-  @override
-  void initState() {
-    super.initState();
-    orderItems = List.from(widget.orderItems); // Create a copy of the order items
-  }
-
-  void _updateQuantity(int index, int newQuantity) {
-    if (newQuantity > 0) {
-      setState(() {
-        orderItems[index]['quantity'] = newQuantity;
-      });
-    } else {
-      // Remove item if quantity is 0
-      setState(() {
-        orderItems.removeAt(index);
-      });
-    }
-    widget.onOrderUpdated(orderItems); // Notify parent of changes
-  }
-
-  void _editItem(int index) async {
-    final item = orderItems[index];
-    final result = await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => CustomizeOrderPanel(
-        itemDetails: item,
-        product: item,
-      ),
-    );
-
-    if (result != null) {
-      setState(() {
-        orderItems[index] = {
-          ...item,
-          'selectedVariant': result['variantId'],
-          'modifiers': result['modifiers'],
-          'notes': result['notes'],
-          'Price': result['price'],
-        };
-      });
-      widget.onOrderUpdated(orderItems); // Notify parent of changes
-    }
-  }
-
-  double _calculateTotalAmount() {
-    return orderItems.fold(0.0, (double sum, item) {
-      final price = (item['Price'] as num? ?? 0).toDouble();
-      final quantity = item['quantity'] as int? ?? 0;
-      return sum + (price * quantity);
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('View Cart'),
-        backgroundColor: AppColors.airforceBlue,
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: orderItems.length,
-              itemBuilder: (context, index) {
-                final item = orderItems[index];
-                final price = (item['Price'] as num? ?? 0).toDouble();
-                final quantity = item['quantity'] as int? ?? 0;
-                final totalPrice = price * quantity;
+    final totalQuantity = orderItems.fold(0, (sum, item) => sum + (item['quantity'] as int));
 
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item['Name'] ?? 'Unnamed Item',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        if (item['selectedVariant'] != null)
-                          Text(
-                            'Variant: ${item['selectedVariant']}',
-                            style: TextStyle(color: Colors.grey.shade600),
-                          ),
-                        if (item['modifiers'] != null && item['modifiers'].isNotEmpty)
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Modifiers:',
-                                style: TextStyle(color: Colors.grey.shade600),
-                              ),
-                              ...item['modifiers'].map<Widget>((modifier) {
-                                return Text(
-                                  '- ${modifier['Name']} (₱${modifier['Price']})',
-                                  style: TextStyle(color: Colors.grey.shade600),
-                                );
-                              }).toList(),
-                            ],
-                          ),
-                        if (item['notes'] != null && item['notes'].isNotEmpty)
-                          Text(
-                            'Notes: ${item['notes']}',
-                            style: TextStyle(color: Colors.grey.shade600),
-                          ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.remove),
-                                  onPressed: () => _updateQuantity(index, quantity - 1),
-                                ),
-                                Text('$quantity'),
-                                IconButton(
-                                  icon: const Icon(Icons.add),
-                                  onPressed: () => _updateQuantity(index, quantity + 1),
-                                ),
-                              ],
-                            ),
-                            Text(
-                              '₱${totalPrice.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: () => _editItem(index),
-                            child: const Text('Edit'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 4,
+            offset: Offset(0, -2),
           ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Order Details Box
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
             decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 4,
-                  offset: const Offset(0, -2),
-                ),
-              ],
+              border: Border.all(color: Colors.black54, width: 1),
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Total: ₱${_calculateTotalAmount().toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Order Summary",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      "Total: ₱ ${totalAmount.toStringAsFixed(2)}  |  Items: $totalQuantity",
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                  ],
                 ),
-                ElevatedButton(
+                TextButton(
                   onPressed: () {
-                    // Handle checkout logic
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ViewCartPage(
+                          orderItems: orderItems,
+                          onOrderUpdated: onOrderUpdated, // Pass the callback
+                        ),
+                      ),
+                    );
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.airforceBlue,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  ),
-                  child: const Text('Checkout', style: TextStyle(color: Colors.white)),
+                  child: Icon(Icons.shopping_cart, color: AppColors.airforceBlue, size: 25),
                 ),
               ],
             ),
+          ),
+
+          SizedBox(height: 16),
+
+          // Buttons Row
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: onCancel,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.flame,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: Text("Cancel Order", style: TextStyle(fontSize: 16, color: Colors.white)),
+                ),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: onDone,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.airforceBlue,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: Text("Done", style: TextStyle(fontSize: 16, color: Colors.white)),
+                ),
+              ),
+            ],
           ),
         ],
       ),
