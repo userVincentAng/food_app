@@ -123,12 +123,13 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
                 double totalPrice = widget.itemDetails['Price'] ?? widget.product['Price'];
 
                 // If a variant is selected, use its price
+                Map<String, dynamic> selectedVariantDetails = {};
                 if (selectedVariant != null) {
-                  var selectedVariantDetails = variants.firstWhere(
+                  selectedVariantDetails = variants.firstWhere(
                         (variant) => variant['SKUId'] == selectedVariant,
-                    orElse: () => null,
+                    orElse: () => {}, // Fallback if variant is not found
                   );
-                  if (selectedVariantDetails != null) {
+                  if (selectedVariantDetails.isNotEmpty) {
                     totalPrice = selectedVariantDetails['Price'];
                   }
                 }
@@ -141,9 +142,11 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
                 // Return the selected variant, modifiers, notes, and total price
                 Navigator.pop(context, {
                   'variantId': selectedVariant,
-                  'modifiers': selectedModifiers.values.toList(), // Include modifier details
-                  'notes': _notesController.text.trim(), // Include notes
-                  'price': totalPrice, // Include the total price
+                  'variantDetails': selectedVariantDetails, // Include variant details
+                  'modifiers': selectedModifiers.values.toList(),
+                  'notes': _notesController.text.trim(),
+                  'price': totalPrice,
+                  'ProductName': widget.product['ProductName'] ?? widget.itemDetails['ProductName'], // Use 'ProductName'
                 });
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.green),

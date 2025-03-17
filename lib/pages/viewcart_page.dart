@@ -55,10 +55,10 @@ class ViewCartPageState extends State<ViewCartPage> {
       setState(() {
         orderItems[index] = {
           ...item,
-          'selectedVariant': result['variantId'],
+          'selectedVariant': result['variantId'], // Store the selected variant name'
           'modifiers': result['modifiers'],
           'notes': result['notes'],
-          'Price': result['price'],
+          'Price': result['price']
         };
       });
       widget.onOrderUpdated(orderItems); // Notify parent of changes
@@ -100,7 +100,7 @@ class ViewCartPageState extends State<ViewCartPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          item['Name'] ?? 'Unnamed Item',
+                          item['ProductName'] ?? 'Unnam Item', //wala tong kwenta
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -109,7 +109,7 @@ class ViewCartPageState extends State<ViewCartPage> {
                         const SizedBox(height: 8),
                         if (item['selectedVariant'] != null)
                           Text(
-                            'Variant: ${item['selectedVariant']}',
+                            item['variantDetails'] ? ['CombiName'] ?? 'No Size Selected',
                             style: TextStyle(color: Colors.grey.shade600),
                           ),
                         if (item['modifiers'] != null && item['modifiers'].isNotEmpty)

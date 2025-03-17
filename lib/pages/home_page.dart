@@ -153,9 +153,12 @@ class HomePageState extends State<HomePage> {
         // If the item does not exist, add it to the list
         orderItems.add({
           ...product,
+          'ProductName': product['ProductName'] ?? 'Unnamed Item',
           'Price': finalPrice,
           'quantity': 1,
           'notes': product['notes'],
+          'selectedVariant': selectedVariantId,
+          'variantDetails': selectedVariant,
         });
       }
     });
@@ -328,11 +331,12 @@ class HomePageState extends State<HomePage> {
 
                                       _addToOrder({
                                         ...itemDetails,
-                                        'Price': product['Price'] ?? itemDetails['Price'], // Use passed price or fallback
-                                        'selectedVariant': result['variantId'], // Add selected variant
-                                        'modifiers': result['modifiers'], // Add selected modifiers
+                                        'ProductName': product['ProductName'] ?? 'Unnamed Item', // Use 'ProductName'
+                                        'Price': product['Price'] ?? itemDetails['Price'],
+                                        'selectedVariant': result['variantId'],
+                                        'variantDetails': result['variantDetails'], // Include variant details
+                                        'modifiers': result['modifiers'],
                                         'notes': result['notes'],
-                                        'Name': product['ProductName'] ?? itemDetails['ProductName'], // Include notes
                                       });
 
                                     } catch (e) {
