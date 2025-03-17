@@ -3,14 +3,8 @@ import 'package:flutter/material.dart';
 class CustomizeOrderPanel extends StatefulWidget {
   final Map<String, dynamic> itemDetails;
   final Map<String, dynamic> product;
-  final Function(Map<String, dynamic> updatedItem)? onAddToOrder; // Add this parameter
 
-  const CustomizeOrderPanel({
-    super.key,
-    required this.itemDetails,
-    required this.product,
-    this.onAddToOrder, // Add this parameter
-  });
+  const CustomizeOrderPanel({super.key, required this.itemDetails, required this.product});
 
   @override
   CustomizeOrderPanelState createState() => CustomizeOrderPanelState();
@@ -144,23 +138,13 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
                   totalPrice += modifier['Price'];
                 });
 
-                // Prepare the updated item
-                final updatedItem = {
-                  ...widget.product, // Include existing product details
-                  'selectedVariant': selectedVariant, // Include selected variant
-                  'modifiers': selectedModifiers.values.toList(), // Include selected modifiers
+                // Return the selected variant, modifiers, notes, and total price
+                Navigator.pop(context, {
+                  'variantId': selectedVariant,
+                  'modifiers': selectedModifiers.values.toList(), // Include modifier details
                   'notes': _notesController.text.trim(), // Include notes
                   'price': totalPrice, // Include the total price
-                  'quantity': 1, // Default quantity
-                };
-
-                // Call the onAddToOrder callback if it exists
-                if (widget.onAddToOrder != null) {
-                  widget.onAddToOrder!(updatedItem);
-                }
-
-                // Close the modal
-                Navigator.pop(context);
+                });
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
               child: const Text(
