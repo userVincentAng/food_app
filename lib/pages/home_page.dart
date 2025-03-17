@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:food_app/pages/welcome_page.dart';
-
+import 'package:collection/collection.dart';
 import '../api_service.dart';
 import '../color.dart';
 import '../product_card.dart';
@@ -131,52 +131,30 @@ class HomePageState extends State<HomePage> {
   }
 
   void _addToOrder(Map<String, dynamic> product) {
-    // Ensure the base price is always included
     final basePrice = (product['Price'] as num?)?.toDouble() ?? 0.0;
-
-    // Check if the product has variants (from fetchItemDetails)
     final selectedVariantId = product['selectedVariant'];
     final variants = product['itemVariants'] as List<dynamic>? ?? [];
-    final selectedVariant = variants.isNotEmpty
-        ? variants.firstWhere(
-          (variant) => variant['SKUId'] == selectedVariantId,
-      orElse: () => null,
-    )
-        : null;
-
-    // Use the selected variant's price if available, otherwise use the base price
-    final variantPrice = selectedVariant != null
-        ? (selectedVariant['Price'] as num?)?.toDouble() ?? basePrice
-        : basePrice;
-
-    // Calculate the total price of modifiers (if any)
+    final selectedVariant = variants.firstWhereOrNull((v) => v['SKUId'] == selectedVariantId);
+    final variantPrice = (selectedVariant?['Price'] as num?)?.toDouble() ?? basePrice;
     final modifiers = product['modifiers'] as List<Map<String, dynamic>>? ?? [];
-    final totalModifierPrice = modifiers.fold<double>(0.0, (sum, modifier) {
-      return sum + ((modifier['Price'] as num?)?.toDouble() ?? 0.0);
-    });
-
-    // Calculate the final price (base price + variant price + modifiers)
+    final totalModifierPrice = modifiers.fold(0.0, (sum, mod) => sum + ((mod['Price'] as num?)?.toDouble() ?? 0.0));
     final finalPrice = variantPrice + totalModifierPrice;
 
     setState(() {
-      // Check if the product already exists in the cart
-      int existingIndex = orderItems.indexWhere((item) =>
-      item['Id'] == product['Id'] && // Match by product ID
-          item['selectedVariant'] == selectedVariantId && // Match by selected variant
-          item['modifiers'] == modifiers); // Match by modifiers
+      final existingItem = orderItems.firstWhereOrNull((item) =>
+      item['Id'] == product['Id'] &&
+          item['selectedVariant'] == selectedVariantId &&
+          ListEquality().equals(item['modifiers'], modifiers));
 
-      if (existingIndex != -1) {
-        // If the product already exists, increment the quantity
-        orderItems[existingIndex]['quantity'] += 1;
+      if (existingItem != null) {
+        existingItem['quantity'] += 1;
       } else {
-        // If the product is new, add it to the cart
-        final newItem = {
+        orderItems.add({
           ...product,
-          'Price': finalPrice, // Use the final calculated price
+          'Price': finalPrice,
           'quantity': 1,
           'notes': product['notes'],
-        };
-        orderItems.add(newItem);
+        });
       }
     });
   }
@@ -243,17 +221,23 @@ class HomePageState extends State<HomePage> {
                             : ListWheelScrollView.useDelegate(
                           controller: _scrollController,
                           itemExtent: 100, // 15% of screen height
-                          physics: FixedExtentScrollPhysics(),
+                          physics: const FixedExtentScrollPhysics(),
                           diameterRatio: 2.5,
                           perspective: 0.0001,
+                          onSelectedItemChanged: (index) {
+                            // Keep the scrolling seamless
+                            if (index > 200000 || index < 50000) {
+                              _scrollController.jumpToItem(100000 + (index % categories.length));
+                            }
+                          },
                           childDelegate: ListWheelChildBuilderDelegate(
-                            childCount: 100000, // Simulate infinite looping
                             builder: (context, index) {
                               final actualIndex = index % categories.length;
                               final category = categories[actualIndex];
+
                               return GestureDetector(
                                 onTap: () {
-                                  _onCategorySelected(category['Id'].toString(), actualIndex); // Pass the category ID as a string
+                                  _onCategorySelected(category['Id'].toString(), actualIndex);
                                   _scrollController.animateToItem(
                                     index,
                                     duration: const Duration(milliseconds: 500),
@@ -263,14 +247,18 @@ class HomePageState extends State<HomePage> {
                                 child: SizedBox(
                                   height: 100, // 15% of screen height
                                   child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Flexible(
-                                        child: Text(
-                                          category['CategoryName'],
-                                          style: const TextStyle(fontSize: 12, color: Colors.black),
-                                          overflow: TextOverflow.ellipsis,
-                                          maxLines: 2,
+                                      Text(
+                                        category['CategoryName'],
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: selectedCategoryIndex == actualIndex
+                                              ? Colors.black
+                                              : Colors.grey,
                                         ),
+                                        textAlign: TextAlign.center,
                                       ),
                                     ],
                                   ),
@@ -321,39 +309,36 @@ class HomePageState extends State<HomePage> {
                                 return ProductCard(
                                   product: product,
                                   onTap: (itemId) async {
+                                    final scaffoldMessenger = ScaffoldMessenger.of(context); // Store before async call
                                     try {
+
                                       // Fetch item details
                                       final itemDetails = await ApiService.fetchItemDetails('1', itemId);
 
-                                      if (!mounted) return;
-
-                                      // Debugging: Print itemDetails to verify the structure
-                                      print('Item Details: $itemDetails');
-                                      print('Products: $product');
-
-                                      // Show the customization panel
+                                      if (!mounted) return; // Check before opening bottom sheet
                                       final result = await showModalBottomSheet(
                                         context: context,
                                         isScrollControlled: true,
                                         builder: (context) => CustomizeOrderPanel(itemDetails: itemDetails, product: product),
                                       );
 
-                                      if (result != null) {
-                                        // Log the customization result
+                                      if (!mounted || result == null) return; // Check again after async gap
 
-                                        // Add the product to the cart with customization data
-                                        _addToOrder({
-                                          ...itemDetails, // Include all item details
-                                          'Price': product['Price'] ?? itemDetails['Price'], // Use the passed price or fallback to basePrice
-                                          'selectedVariant': result['variantId'], // Add selected variant
-                                          'modifiers': result['modifiers'], // Add selected modifiers
-                                          'notes': result['notes'], // Include notes
-                                        });
-                                      }
+                                      _addToOrder({
+                                        ...itemDetails,
+                                        'Price': product['Price'] ?? itemDetails['Price'], // Use passed price or fallback
+                                        'selectedVariant': result['variantId'], // Add selected variant
+                                        'modifiers': result['modifiers'], // Add selected modifiers
+                                        'notes': result['notes'], // Include notes
+                                      });
+
                                     } catch (e) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Error loading item details: $e')),
-                                      );
+                                      if (mounted) {
+                                        // Use the stored reference to show snackbar safely
+                                        scaffoldMessenger.showSnackBar(
+                                          SnackBar(content: Text('Error loading item details: $e')),
+                                        );
+                                      }
                                     }
                                   },
                                 );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'customize_order.dart'; // Ensure this import is correct
 
 class ViewCartPage extends StatelessWidget {
   final List<Map<String, dynamic>> orderItems;
@@ -24,7 +25,7 @@ class ViewCartPage extends StatelessWidget {
       appBar: AppBar(
         title: Row(
           children: [
-            const Icon(Icons.shopping_cart, size: 30,),
+            const Icon(Icons.shopping_cart, size: 30),
             const SizedBox(width: 20),
             const Text('View Cart'),
           ],
@@ -55,8 +56,8 @@ class ViewCartPage extends StatelessWidget {
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Variant: ${item['variant'] ?? 'N/A'}'),
-                        Text('Modifiers: ${item['modifiers']?.join(', ') ?? 'N/A'}'),
+                        Text('Variant: ${item['selectedVariant'] ?? 'N/A'}'),
+                        Text('Modifiers: ${item['modifiers']?.map((mod) => mod['Name']).join(', ') ?? 'N/A'}'),
                         Text('Notes: ${item['notes'] ?? 'N/A'}'),
                         Text('Price: ₱${item['price'].toString()}'),
                         Row(
@@ -123,18 +124,19 @@ class ViewCartPage extends StatelessWidget {
   }
 
   void _editItem(BuildContext context, Map<String, dynamic> item, int index) {
-  //   showModalBottomSheet(
-  //     context: context,
-  //     isScrollControlled: true,
-  //     builder: (context) {
-  //       // return CustomizeOrderPanel(
-  //       //   product: item,
-  //       //   onAddToOrder: (updatedItem) {
-  //       //     onUpdateItem(index, updatedItem);
-  //       //     Navigator.pop(context);
-  //       //   },
-  //       // );
-  //     },
-  //   );
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return CustomizeOrderPanel(
+          itemDetails: item,
+          product: item,
+          //   onAddToOrder: (updatedItem) {
+          //   onUpdateItem(index, updatedItem);
+          //   Navigator.pop(context);
+          // },
+        );
+      },
+    );
   }
 }
