@@ -141,14 +141,16 @@ class HomePageState extends State<HomePage> {
     final finalPrice = variantPrice + totalModifierPrice;
 
     setState(() {
-      final existingItem = orderItems.firstWhereOrNull((item) =>
+      final existingItemIndex = orderItems.indexWhere((item) =>
       item['Id'] == product['Id'] &&
           item['selectedVariant'] == selectedVariantId &&
           ListEquality().equals(item['modifiers'], modifiers));
 
-      if (existingItem != null) {
-        existingItem['quantity'] += 1;
+      if (existingItemIndex != -1) {
+        // If the item already exists, increment the quantity
+        orderItems[existingItemIndex]['quantity'] += 1;
       } else {
+        // If the item does not exist, add it to the list
         orderItems.add({
           ...product,
           'Price': finalPrice,

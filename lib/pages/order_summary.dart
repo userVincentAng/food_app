@@ -20,6 +20,8 @@ class OrderSummaryPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final totalQuantity = orderItems.fold(0, (sum, item) => sum + (item['quantity'] as int));
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -55,7 +57,7 @@ class OrderSummaryPanel extends StatelessWidget {
                     ),
                     SizedBox(height: 4),
                     Text(
-                      "Total: ₱ ${totalAmount.toStringAsFixed(2)}  |  Items: $totalItems",
+                      "Total: ₱ ${totalAmount.toStringAsFixed(2)}  |  Items: $totalQuantity",
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                     ),
                   ],
