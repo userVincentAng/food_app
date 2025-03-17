@@ -16,7 +16,11 @@ class ViewCartPage extends StatelessWidget {
   });
 
   double _calculateTotalAmount() {
-    return orderItems.fold(0, (sum, item) => sum + (item['price'] as num) * (item['quantity'] as int));
+    return orderItems.fold(0.0, (sum, item) => sum + (item['price'] as num).toDouble() * (item['quantity'] as int));
+  }
+
+  int _calculateTotalItems() {
+    return orderItems.fold(0, (sum, item) => sum + (item['quantity'] as int));
   }
 
   @override
@@ -106,7 +110,7 @@ class ViewCartPage extends StatelessWidget {
               children: [
                 Text('Total Amount: ₱${_calculateTotalAmount().toStringAsFixed(2)}'),
                 const SizedBox(width: 10),
-                Text('|  Total Items: ${orderItems.length}'),
+                Text('|  Total Items: ${_calculateTotalItems()}'),
                 const SizedBox(width: 20),
               ],
             ),
@@ -131,7 +135,7 @@ class ViewCartPage extends StatelessWidget {
         return CustomizeOrderPanel(
           itemDetails: item,
           product: item,
-          //   onAddToOrder: (updatedItem) {
+          // onAddToOrder: (updatedItem) {
           //   onUpdateItem(index, updatedItem);
           //   Navigator.pop(context);
           // },
