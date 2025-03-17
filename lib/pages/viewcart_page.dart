@@ -1,101 +1,172 @@
 import 'package:flutter/material.dart';
-import 'customize_order.dart'; // Ensure this import is correct
+import 'package:collection/collection.dart';
+import '../color.dart';
+import 'customize_order.dart';
 
-class ViewCartPage extends StatelessWidget {
+class ViewCartPage extends StatefulWidget {
   final List<Map<String, dynamic>> orderItems;
-  final Function(int index, Map<String, dynamic> updatedItem) onUpdateItem;
-  final Function(int index) onRemoveItem;
-  final Function() onCheckout;
+  final Function(List<Map<String, dynamic>>) onOrderUpdated;
 
   const ViewCartPage({
     super.key,
     required this.orderItems,
-    required this.onUpdateItem,
-    required this.onRemoveItem,
-    required this.onCheckout,
+    required this.onOrderUpdated,
   });
 
-  double _calculateTotalAmount() {
-    return orderItems.fold(0.0, (sum, item) => sum + (item['price'] as num).toDouble() * (item['quantity'] as int));
+  @override
+  ViewCartPageState createState() => ViewCartPageState();
+}
+
+class ViewCartPageState extends State<ViewCartPage> {
+  late List<Map<String, dynamic>> orderItems;
+
+  @override
+  void initState() {
+    super.initState();
+    orderItems = List.from(widget.orderItems); // Create a copy of the order items
   }
 
-  int _calculateTotalItems() {
-    return orderItems.fold(0, (sum, item) => sum + (item['quantity'] as int));
+  void _updateQuantity(int index, int newQuantity) {
+    if (newQuantity > 0) {
+      setState(() {
+        orderItems[index]['quantity'] = newQuantity;
+      });
+    } else {
+      // Remove item if quantity is 0
+      setState(() {
+        orderItems.removeAt(index);
+      });
+    }
+    widget.onOrderUpdated(orderItems); // Notify parent of changes
+  }
+
+  void _editItem(int index) async {
+    final item = orderItems[index];
+    final result = await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => CustomizeOrderPanel(
+        itemDetails: item,
+        product: item,
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        orderItems[index] = {
+          ...item,
+          'selectedVariant': result['variantId'],
+          'modifiers': result['modifiers'],
+          'notes': result['notes'],
+          'Price': result['price'],
+        };
+      });
+      widget.onOrderUpdated(orderItems); // Notify parent of changes
+    }
+  }
+
+  double _calculateTotalAmount() {
+    return orderItems.fold(0.0, (double sum, item) {
+      final price = (item['Price'] as num? ?? 0).toDouble();
+      final quantity = item['quantity'] as int? ?? 0;
+      return sum + (price * quantity);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            const Icon(Icons.shopping_cart, size: 30),
-            const SizedBox(width: 20),
-            const Text('View Cart'),
-          ],
-        ),
+        title: const Text('View Cart'),
+        backgroundColor: AppColors.airforceBlue,
       ),
       body: Column(
         children: [
           Expanded(
             child: ListView.builder(
+              padding: const EdgeInsets.all(16),
               itemCount: orderItems.length,
               itemBuilder: (context, index) {
                 final item = orderItems[index];
+                final price = (item['Price'] as num? ?? 0).toDouble();
+                final quantity = item['quantity'] as int? ?? 0;
+                final totalPrice = price * quantity;
+
                 return Card(
-                  margin: const EdgeInsets.all(8.0),
-                  child: ListTile(
-                    leading: item['image'] != null
-                        ? Image.network(
-                      item['image'],
-                      width: 50,
-                      height: 50,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const Icon(Icons.error, color: Colors.red);
-                      },
-                    )
-                        : const Icon(Icons.image, size: 50), // Fallback if no image URL
-                    title: Text(item['name']),
-                    subtitle: Column(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Variant: ${item['selectedVariant'] ?? 'N/A'}'),
-                        Text('Modifiers: ${item['modifiers']?.map((mod) => mod['Name']).join(', ') ?? 'N/A'}'),
-                        Text('Notes: ${item['notes'] ?? 'N/A'}'),
-                        Text('Price: ₱${item['price'].toString()}'),
+                        Text(
+                          item['Name'] ?? 'Unnamed Item',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        if (item['selectedVariant'] != null)
+                          Text(
+                            'Variant: ${item['selectedVariant']}',
+                            style: TextStyle(color: Colors.grey.shade600),
+                          ),
+                        if (item['modifiers'] != null && item['modifiers'].isNotEmpty)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Modifiers:',
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                              ...item['modifiers'].map<Widget>((modifier) {
+                                return Text(
+                                  '- ${modifier['Name']} (₱${modifier['Price']})',
+                                  style: TextStyle(color: Colors.grey.shade600),
+                                );
+                              }).toList(),
+                            ],
+                          ),
+                        if (item['notes'] != null && item['notes'].isNotEmpty)
+                          Text(
+                            'Notes: ${item['notes']}',
+                            style: TextStyle(color: Colors.grey.shade600),
+                          ),
+                        const SizedBox(height: 8),
                         Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            IconButton(
-                              icon: const Icon(Icons.remove),
-                              onPressed: () {
-                                if (item['quantity'] > 1) {
-                                  final updatedItem = Map<String, dynamic>.from(item);
-                                  updatedItem['quantity'] = item['quantity'] - 1;
-                                  onUpdateItem(index, updatedItem);
-                                } else {
-                                  onRemoveItem(index);
-                                }
-                              },
+                            Row(
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.remove),
+                                  onPressed: () => _updateQuantity(index, quantity - 1),
+                                ),
+                                Text('$quantity'),
+                                IconButton(
+                                  icon: const Icon(Icons.add),
+                                  onPressed: () => _updateQuantity(index, quantity + 1),
+                                ),
+                              ],
                             ),
-                            Text('${item['quantity']}'),
-                            IconButton(
-                              icon: const Icon(Icons.add),
-                              onPressed: () {
-                                final updatedItem = Map<String, dynamic>.from(item);
-                                updatedItem['quantity'] = item['quantity'] + 1;
-                                onUpdateItem(index, updatedItem);
-                              },
+                            Text(
+                              '₱${totalPrice.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ],
                         ),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () => _editItem(index),
+                            child: const Text('Edit'),
+                          ),
+                        ),
                       ],
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.edit),
-                      onPressed: () {
-                        _editItem(context, item, index);
-                      },
                     ),
                   ),
                 );
@@ -103,44 +174,42 @@ class ViewCartPage extends StatelessWidget {
             ),
           ),
           Container(
-            height: 70,
-            width: double.infinity,
-            padding: const EdgeInsets.only(left: 20.0),
-            child: Row(
-              children: [
-                Text('Total Amount: ₱${_calculateTotalAmount().toStringAsFixed(2)}'),
-                const SizedBox(width: 10),
-                Text('|  Total Items: ${_calculateTotalItems()}'),
-                const SizedBox(width: 20),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 4,
+                  offset: const Offset(0, -2),
+                ),
               ],
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 20.0),
-            child: ElevatedButton(
-              onPressed: onCheckout,
-              child: const Text('Proceed to Checkout'),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Total: ₱${_calculateTotalAmount().toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    // Handle checkout logic
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.airforceBlue,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
+                  child: const Text('Checkout', style: TextStyle(color: Colors.white)),
+                ),
+              ],
             ),
           ),
         ],
       ),
-    );
-  }
-
-  void _editItem(BuildContext context, Map<String, dynamic> item, int index) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        return CustomizeOrderPanel(
-          itemDetails: item,
-          product: item,
-          // onAddToOrder: (updatedItem) {
-          //   onUpdateItem(index, updatedItem);
-          //   Navigator.pop(context);
-          // },
-        );
-      },
     );
   }
 }

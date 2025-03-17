@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:food_app/pages/viewcart_page.dart';
 
 import '../color.dart';
 
@@ -8,6 +9,7 @@ class OrderSummaryPanel extends StatelessWidget {
   final List<Map<String, dynamic>> orderItems;
   final VoidCallback onCancel;
   final VoidCallback onDone;
+  final Function(List<Map<String, dynamic>>) onOrderUpdated; // Add this callback
 
   const OrderSummaryPanel({
     super.key,
@@ -16,6 +18,7 @@ class OrderSummaryPanel extends StatelessWidget {
     required this.orderItems,
     required this.onCancel,
     required this.onDone,
+    required this.onOrderUpdated, // Add this parameter
   });
 
   @override
@@ -26,7 +29,7 @@ class OrderSummaryPanel extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
         boxShadow: [
           BoxShadow(
             color: Colors.black26,
@@ -64,7 +67,15 @@ class OrderSummaryPanel extends StatelessWidget {
                 ),
                 TextButton(
                   onPressed: () {
-                    // Navigate to cart screen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ViewCartPage(
+                          orderItems: orderItems,
+                          onOrderUpdated: onOrderUpdated, // Pass the callback
+                        ),
+                      ),
+                    );
                   },
                   child: Icon(Icons.shopping_cart, color: AppColors.airforceBlue, size: 25),
                 ),

@@ -331,7 +331,8 @@ class HomePageState extends State<HomePage> {
                                         'Price': product['Price'] ?? itemDetails['Price'], // Use passed price or fallback
                                         'selectedVariant': result['variantId'], // Add selected variant
                                         'modifiers': result['modifiers'], // Add selected modifiers
-                                        'notes': result['notes'], // Include notes
+                                        'notes': result['notes'],
+                                        'Name': product['ProductName'] ?? itemDetails['ProductName'], // Include notes
                                       });
 
                                     } catch (e) {
@@ -360,7 +361,7 @@ class HomePageState extends State<HomePage> {
             child: OrderSummaryPanel(
               totalAmount: _calculateTotalAmount(),
               totalItems: orderItems.length,
-              orderItems: orderItems, // Pass the orderItems list
+              orderItems: orderItems,
               onCancel: () {
                 Navigator.push(
                   context,
@@ -368,6 +369,12 @@ class HomePageState extends State<HomePage> {
                 );
               },
               onDone: () {
+                // Handle done logic (e.g., navigate to checkout)
+              },
+              onOrderUpdated: (updatedItems) {
+                setState(() {
+                  orderItems = updatedItems; // Update the order items
+                });
               },
             ),
           ),
