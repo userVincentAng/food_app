@@ -1,146 +1,176 @@
 import 'package:flutter/material.dart';
-import 'customize_order.dart'; // Ensure this import is correct
 
-class ViewCartPage extends StatelessWidget {
-  final List<Map<String, dynamic>> orderItems;
-  final Function(int index, Map<String, dynamic> updatedItem) onUpdateItem;
-  final Function(int index) onRemoveItem;
-  final Function() onCheckout;
+class CustomizeOrderPanel extends StatefulWidget {
+  final Map<String, dynamic> itemDetails;
+  final Map<String, dynamic> product;
+  final Function(Map<String, dynamic> updatedItem)? onAddToOrder; // Add this parameter
 
-  const ViewCartPage({
+  const CustomizeOrderPanel({
     super.key,
-    required this.orderItems,
-    required this.onUpdateItem,
-    required this.onRemoveItem,
-    required this.onCheckout,
+    required this.itemDetails,
+    required this.product,
+    this.onAddToOrder, // Add this parameter
   });
 
-  double _calculateTotalAmount() {
-    return orderItems.fold(0.0, (sum, item) => sum + (item['price'] as num).toDouble() * (item['quantity'] as int));
-  }
+  @override
+  CustomizeOrderPanelState createState() => CustomizeOrderPanelState();
+}
 
-  int _calculateTotalItems() {
-    return orderItems.fold(0, (sum, item) => sum + (item['quantity'] as int));
+class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
+  int? selectedVariant; // Store SKUId
+  Map<int, Map<String, dynamic>> selectedModifiers = {}; // Track selected modifiers with their details
+  final TextEditingController _notesController = TextEditingController(); // Controller for notes
+
+  @override
+  void dispose() {
+    _notesController.dispose(); // Dispose the controller
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Row(
+    var variants = widget.itemDetails['itemVariants'] ?? [];
+    var modifiers = widget.itemDetails['itemModifiers'] ?? [];
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.shopping_cart, size: 30),
-            const SizedBox(width: 20),
-            const Text('View Cart'),
+            // Variants Selection
+            if (variants.isNotEmpty) ...[
+              const Text(
+                "Select Size",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              ...variants.map<Widget>((variant) {
+                return RadioListTile<int>(
+                  title: Text(
+                    "${variant['CombiName']} - ₱${variant['Price']}",
+                  ),
+                  value: variant['SKUId'], // Store SKUId instead of name
+                  groupValue: selectedVariant,
+                  onChanged: (value) {
+                    setState(() => selectedVariant = value);
+                  },
+                );
+              }).toList(),
+            ],
+
+            // Modifiers Selection
+            if (modifiers.isNotEmpty) ...[
+              const Text(
+                "Add Extras",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              ...modifiers
+                  .map<Widget>(
+                    (modifier) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      modifier['ModifierName'] ?? "Extras",
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    ...modifier['ModifierOptions']
+                        .map<Widget>(
+                          (option) => CheckboxListTile(
+                        title: Text(
+                          "${option['Name']} - ₱${option['Price']}",
+                        ),
+                        value: selectedModifiers.containsKey(option['Id']),
+                        onChanged: (bool? value) {
+                          setState(() {
+                            if (value == true) {
+                              selectedModifiers[option['Id']] = option; // Add modifier details
+                            } else {
+                              selectedModifiers.remove(option['Id']); // Remove modifier
+                            }
+                          });
+                        },
+                      ),
+                    )
+                        .toList(),
+                  ],
+                ),
+              )
+                  .toList(),
+            ],
+
+            // Add Notes Section
+            const SizedBox(height: 16),
+            const Text(
+              "Add Notes",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            TextFormField(
+              controller: _notesController,
+              decoration: const InputDecoration(
+                hintText: "e.g., No ice, less sugar, etc.",
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3, // Allow multiple lines for notes
+            ),
+
+            // Confirm Button
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                // Check if there are variants and none are selected
+                if (variants.isNotEmpty && selectedVariant == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please select a size!')),
+                  );
+                  return;
+                }
+
+                // Calculate the total price
+                double totalPrice = widget.itemDetails['Price'] ?? widget.product['Price'];
+
+                // If a variant is selected, use its price
+                if (selectedVariant != null) {
+                  var selectedVariantDetails = variants.firstWhere(
+                        (variant) => variant['SKUId'] == selectedVariant,
+                    orElse: () => null,
+                  );
+                  if (selectedVariantDetails != null) {
+                    totalPrice = selectedVariantDetails['Price'];
+                  }
+                }
+
+                // Add the price of selected modifiers
+                selectedModifiers.values.forEach((modifier) {
+                  totalPrice += modifier['Price'];
+                });
+
+                // Prepare the updated item
+                final updatedItem = {
+                  ...widget.product, // Include existing product details
+                  'selectedVariant': selectedVariant, // Include selected variant
+                  'modifiers': selectedModifiers.values.toList(), // Include selected modifiers
+                  'notes': _notesController.text.trim(), // Include notes
+                  'price': totalPrice, // Include the total price
+                  'quantity': 1, // Default quantity
+                };
+
+                // Call the onAddToOrder callback if it exists
+                if (widget.onAddToOrder != null) {
+                  widget.onAddToOrder!(updatedItem);
+                }
+
+                // Close the modal
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+              child: const Text(
+                "Add to Cart",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
           ],
         ),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              itemCount: orderItems.length,
-              itemBuilder: (context, index) {
-                final item = orderItems[index];
-                return Card(
-                  margin: const EdgeInsets.all(8.0),
-                  child: ListTile(
-                    leading: item['image'] != null
-                        ? Image.network(
-                      item['image'],
-                      width: 50,
-                      height: 50,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const Icon(Icons.error, color: Colors.red);
-                      },
-                    )
-                        : const Icon(Icons.image, size: 50), // Fallback if no image URL
-                    title: Text(item['name']),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Variant: ${item['selectedVariant'] ?? 'N/A'}'),
-                        Text('Modifiers: ${item['modifiers']?.map((mod) => mod['Name']).join(', ') ?? 'N/A'}'),
-                        Text('Notes: ${item['notes'] ?? 'N/A'}'),
-                        Text('Price: ₱${item['price'].toString()}'),
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.remove),
-                              onPressed: () {
-                                if (item['quantity'] > 1) {
-                                  final updatedItem = Map<String, dynamic>.from(item);
-                                  updatedItem['quantity'] = item['quantity'] - 1;
-                                  onUpdateItem(index, updatedItem);
-                                } else {
-                                  onRemoveItem(index);
-                                }
-                              },
-                            ),
-                            Text('${item['quantity']}'),
-                            IconButton(
-                              icon: const Icon(Icons.add),
-                              onPressed: () {
-                                final updatedItem = Map<String, dynamic>.from(item);
-                                updatedItem['quantity'] = item['quantity'] + 1;
-                                onUpdateItem(index, updatedItem);
-                              },
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.edit),
-                      onPressed: () {
-                        _editItem(context, item, index);
-                      },
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          Container(
-            height: 70,
-            width: double.infinity,
-            padding: const EdgeInsets.only(left: 20.0),
-            child: Row(
-              children: [
-                Text('Total Amount: ₱${_calculateTotalAmount().toStringAsFixed(2)}'),
-                const SizedBox(width: 10),
-                Text('|  Total Items: ${_calculateTotalItems()}'),
-                const SizedBox(width: 20),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 20.0),
-            child: ElevatedButton(
-              onPressed: onCheckout,
-              child: const Text('Proceed to Checkout'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _editItem(BuildContext context, Map<String, dynamic> item, int index) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        return CustomizeOrderPanel(
-          itemDetails: item,
-          product: item,
-          onAddToOrder: (updatedItem) {
-            onUpdateItem(index, updatedItem);
-            Navigator.pop(context);
-          },
-        );
-      },
     );
   }
 }
