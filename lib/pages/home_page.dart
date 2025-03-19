@@ -141,18 +141,40 @@ class HomePageState extends State<HomePage> {
     final finalPrice = variantPrice + totalModifierPrice;
 
     setState(() {
-      final existingItemIndex = orderItems.indexWhere((item) =>
-      item['Id'] == product['Id'] &&
-          item['selectedVariant'] == selectedVariantId &&
-          ListEquality().equals(item['modifiers'], modifiers));
+      // Check if the item already exists in the cart
+      final existingItemIndex = orderItems.indexWhere((item) {
+        // Compare the product ID
+        if (item['Id'] != product['Id']) {
+          return false;
+        }
+
+        // Compare the selected variant (if any)
+        if (item['selectedVariant'] != selectedVariantId) {
+          return false;
+        }
+
+        // Compare the modifiers (if any)
+        if (!ListEquality().equals(item['modifiers'], modifiers)) {
+          return false;
+        }
+
+        // Compare the notes (if any)
+        if (item['notes'] != product['notes']) {
+          return false;
+        }
+
+        // If all checks pass, the items are the same
+        return true;
+      });
 
       if (existingItemIndex != -1) {
         // If the item already exists, increment the quantity
         orderItems[existingItemIndex]['quantity'] += 1;
       } else {
-        // If the item does not exist, add it to the list
+        // If the item does not exist, add it to the list with a unique key
         orderItems.add({
           ...product,
+          'Id': product['Id'],
           'ProductName': product['ProductName'] ?? 'Unnamed Item',
           'Price': finalPrice,
           'quantity': 1,
@@ -331,6 +353,7 @@ class HomePageState extends State<HomePage> {
 
                                       _addToOrder({
                                         ...itemDetails,
+                                        'Id': product['Id'] ,
                                         'ProductName': product['ProductName'] ?? 'Unnamed Item', // Use 'ProductName'
                                         'Price': product['Price'] ?? itemDetails['Price'],
                                         'selectedVariant': result['variantId'],

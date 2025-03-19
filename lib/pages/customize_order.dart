@@ -101,7 +101,7 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
             TextFormField(
               controller: _notesController,
               decoration: const InputDecoration(
-                hintText: "e.g., No ice, less sugar, etc.",
+                hintText: "Add instructions or notes...",
                 border: OutlineInputBorder(),
               ),
               maxLines: 3, // Allow multiple lines for notes
@@ -147,6 +147,7 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
                   'notes': _notesController.text.trim(),
                   'price': totalPrice,
                   'ProductName': widget.product['ProductName'] ?? widget.itemDetails['ProductName'], // Use 'ProductName'
+                  'Id': widget.product['Id'] ?? widget.itemDetails['Id'],
                 });
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
