@@ -60,7 +60,7 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
     var modifiers = widget.itemDetails['itemModifiers'] ?? [];
     var productName = widget.product['ProductName'] ?? widget.itemDetails['ProductName'];
     var basePrice = widget.product['Price'] ?? widget.itemDetails['Price'];
-    var imageUrl = 'https://sellercenter.shoppazing.com/api/${widget.product['ImgUrl']}';
+    var imageUrl = widget.product['ImgUrl'];
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -79,7 +79,7 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
                         ClipRRect(
                           borderRadius: BorderRadius.circular(8),
                           child: Image.network(
-                            imageUrl,
+                            'https://sellercenter.shoppazing.com/api/${imageUrl}',
                             width: 100,
                             height: 100,
                             fit: BoxFit.cover,
