@@ -60,189 +60,195 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
     var modifiers = widget.itemDetails['itemModifiers'] ?? [];
     var productName = widget.product['ProductName'] ?? widget.itemDetails['ProductName'];
     var basePrice = widget.product['Price'] ?? widget.itemDetails['Price'];
-    var imageUrl = 'https://sellercenter.shoppazing.com/api/${widget.product['ImgUrl']}'; // Assuming the image URL is provided
+    var imageUrl = 'https://sellercenter.shoppazing.com/api/${widget.product['ImgUrl']}';
 
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Product Image, Name, and Base Price
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Product Image
-                if (imageUrl != null)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      imageUrl,
-                      width: 100,
-                      height: 100,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                const SizedBox(width: 16), // Spacing between image and text
-                // Product Name and Base Price
-                Expanded(
-                  child: Column(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  // Product Image, Name, and Base Price
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Product Name
-                      Text(
-                        productName,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                      if (imageUrl != null)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            imageUrl,
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4), // Spacing between name and price
-                      // Base Price
-                      Text(
-                        "₱$basePrice",
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey,
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              productName,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "₱$basePrice",
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
+                  const SizedBox(height: 16),
+
+                  // Variants Selection
+                  if (variants.isNotEmpty) ...[
+                    const Text("Select Size", style: TextStyle(fontWeight: FontWeight.bold)),
+                    ...variants.map<Widget>((variant) {
+                      return RadioListTile<int>(
+                        title: Text("${variant['CombiName']} - ₱${variant['Price']}"),
+                        value: variant['SKUId'],
+                        groupValue: selectedVariant,
+                        onChanged: (value) {
+                          setState(() {
+                            selectedVariant = value;
+                            _updateFinalPrice();
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ],
+
+                  // Modifiers Selection
+                  if (modifiers.isNotEmpty) ...[
+                    const Text("Add Extras", style: TextStyle(fontWeight: FontWeight.bold)),
+                    ...modifiers.map<Widget>((modifier) {
+                      bool isRequired = modifier['IsRequired'] ?? false;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(modifier['ModifierName'] ?? "Extras",
+                              style: const TextStyle(fontWeight: FontWeight.bold)),
+                          if (isRequired)
+                            ...modifier['ModifierOptions'].map<Widget>((option) {
+                              return RadioListTile<int>(
+                                title: Text("${option['Name']} - ₱${option['Price']}"),
+                                value: option['Id'],
+                                groupValue: selectedModifiers.containsKey(option['Id'])
+                                    ? option['Id']
+                                    : null,
+                                onChanged: (value) {
+                                  setState(() {
+                                    selectedModifiers.removeWhere((key, val) =>
+                                    val['ModifierId'] == modifier['ModifierId']);
+                                    selectedModifiers[option['Id']] = option;
+                                    _updateFinalPrice();
+                                  });
+                                },
+                              );
+                            }).toList(),
+                          if (!isRequired)
+                            ...modifier['ModifierOptions'].map<Widget>((option) {
+                              return CheckboxListTile(
+                                title: Text("${option['Name']} - ₱${option['Price']}"),
+                                value: selectedModifiers.containsKey(option['Id']),
+                                onChanged: (bool? value) {
+                                  setState(() {
+                                    if (value == true) {
+                                      selectedModifiers[option['Id']] = option;
+                                    } else {
+                                      selectedModifiers.remove(option['Id']);
+                                    }
+                                    _updateFinalPrice();
+                                  });
+                                },
+                              );
+                            }).toList(),
+                        ],
+                      );
+                    }).toList(),
+                  ],
+
+                  // Add Notes Section
+                  const SizedBox(height: 16),
+                  const Text("Add Notes", style: TextStyle(fontWeight: FontWeight.bold)),
+                  TextFormField(
+                    controller: _notesController,
+                    decoration: const InputDecoration(
+                      hintText: "Add instructions or notes...",
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 3,
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            ),
+          ),
+
+          // Sticky Button at the Bottom
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 5,
+                  spreadRadius: 1,
                 ),
               ],
             ),
-            const SizedBox(height: 16), // Spacing between product info and variants
-
-            // Variants Selection
-            if (variants.isNotEmpty) ...[
-              const Text(
-                "Select Size",
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              ...variants.map<Widget>((variant) {
-                return RadioListTile<int>(
-                  title: Text(
-                    "${variant['CombiName']} - ₱${variant['Price']}",
-                  ),
-                  value: variant['SKUId'], // Store SKUId instead of name
-                  groupValue: selectedVariant,
-                  onChanged: (value) {
-                    setState(() {
-                      selectedVariant = value;
-                      _updateFinalPrice(); // Update price when variant changes
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.white)),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (variants.isNotEmpty && selectedVariant == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please select a size!')),
+                      );
+                      return;
+                    }
+                    Navigator.pop(context, {
+                      'variantId': selectedVariant,
+                      'variantDetails': selectedVariant != null
+                          ? variants.firstWhere((variant) => variant['SKUId'] == selectedVariant)
+                          : {},
+                      'modifiers': selectedModifiers.values.toList(),
+                      'notes': _notesController.text.trim(),
+                      'price': finalPrice,
+                      'ProductName': widget.product['ProductName'] ?? widget.itemDetails['ProductName'],
+                      'Id': widget.product['Id'] ?? widget.itemDetails['Id'],
                     });
                   },
-                );
-              }).toList(),
-            ],
-
-            // Modifiers Selection
-            if (modifiers.isNotEmpty) ...[
-              const Text(
-                "Add Extras",
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              ...modifiers.map<Widget>((modifier) {
-                bool isRequired = modifier['IsRequired'] ?? false;
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      modifier['ModifierName'] ?? "Extras",
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    if (isRequired)
-                    // Radio buttons for required modifiers
-                      ...modifier['ModifierOptions'].map<Widget>((option) {
-                        return RadioListTile<int>(
-                          title: Text(
-                            "${option['Name']} - ₱${option['Price']}",
-                          ),
-                          value: option['Id'],
-                          groupValue: selectedModifiers.containsKey(option['Id']) ? option['Id'] : null,
-                          onChanged: (value) {
-                            setState(() {
-                              // Clear other selections for this modifier group
-                              selectedModifiers.removeWhere((key, val) => val['ModifierId'] == modifier['ModifierId']);
-                              selectedModifiers[option['Id']] = option; // Add selected option
-                              _updateFinalPrice(); // Update price when modifier changes
-                            });
-                          },
-                        );
-                      }).toList(),
-                    if (!isRequired)
-                    // Checkboxes for non-required modifiers
-                      ...modifier['ModifierOptions'].map<Widget>((option) {
-                        return CheckboxListTile(
-                          title: Text(
-                            "${option['Name']} - ₱${option['Price']}",
-                          ),
-                          value: selectedModifiers.containsKey(option['Id']),
-                          onChanged: (bool? value) {
-                            setState(() {
-                              if (value == true) {
-                                selectedModifiers[option['Id']] = option; // Add modifier details
-                              } else {
-                                selectedModifiers.remove(option['Id']); // Remove modifier
-                              }
-                              _updateFinalPrice(); // Update price when modifier changes
-                            });
-                          },
-                        );
-                      }).toList(),
-                  ],
-                );
-              }).toList(),
-            ],
-
-            // Add Notes Section
-            const SizedBox(height: 16),
-            const Text(
-              "Add Notes",
-              style: TextStyle(fontWeight: FontWeight.bold),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                  child: Text(
+                    "Add to Cart ₱${finalPrice.toStringAsFixed(2)}",
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
             ),
-            TextFormField(
-              controller: _notesController,
-              decoration: const InputDecoration(
-                hintText: "Add instructions or notes...",
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3, // Allow multiple lines for notes
-            ),
-
-            // Confirm Button
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () {
-                // Check if there are variants and none are selected
-                if (variants.isNotEmpty && selectedVariant == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please select a size!')),
-                  );
-                  return;
-                }
-
-                // Return the selected variant, modifiers, notes, and total price
-                Navigator.pop(context, {
-                  'variantId': selectedVariant,
-                  'variantDetails': selectedVariant != null
-                      ? variants.firstWhere((variant) => variant['SKUId'] == selectedVariant)
-                      : {},
-                  'modifiers': selectedModifiers.values.toList(),
-                  'notes': _notesController.text.trim(),
-                  'price': finalPrice,
-                  'ProductName': widget.product['ProductName'] ?? widget.itemDetails['ProductName'], // Use 'ProductName'
-                  'Id': widget.product['Id'] ?? widget.itemDetails['Id'],
-                });
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-              child: Text(
-                "Add to Cart ₱${finalPrice.toStringAsFixed(2)}", // Display finalPrice with 2 decimal places
-                style: const TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
