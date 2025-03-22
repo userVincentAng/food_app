@@ -55,7 +55,8 @@ class ViewCartPageState extends State<ViewCartPage> {
       setState(() {
         orderItems[index] = {
           ...item,
-          'selectedVariant': result['variantId'], // Store the selected variant name'
+          'imageUrl': result['imageUrl'],
+          'selectedVariant': result['variantId'], // Store the selected variant name
           'modifiers': result['modifiers'],
           'notes': result['notes'],
           'Price': result['price']
@@ -63,6 +64,13 @@ class ViewCartPageState extends State<ViewCartPage> {
       });
       widget.onOrderUpdated(orderItems); // Notify parent of changes
     }
+  }
+
+  void _deleteItem(int index) {
+    setState(() {
+      orderItems.removeAt(index);
+    });
+    widget.onOrderUpdated(orderItems); // Notify parent of changes
   }
 
   double _calculateTotalAmount() {
@@ -77,8 +85,15 @@ class ViewCartPageState extends State<ViewCartPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('View Cart'),
+        title: const Text(
+          'View Cart',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         backgroundColor: AppColors.airforceBlue,
+        elevation: 0,
       ),
       body: Column(
         children: [
@@ -93,14 +108,50 @@ class ViewCartPageState extends State<ViewCartPage> {
                 final totalPrice = price * quantity;
 
                 return Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   margin: const EdgeInsets.only(bottom: 16),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Display the image if available
+                        if (item['imageUrl'] != null)
+                          Center(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                item['imageUrl'],
+                                width: 120,
+                                height: 120,
+                                fit: BoxFit.cover,
+                                loadingBuilder: (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return SizedBox(
+                                    width: 120,
+                                    height: 120,
+                                    child: Center(
+                                      child: CircularProgressIndicator(
+                                        value: loadingProgress.expectedTotalBytes != null
+                                            ? loadingProgress.cumulativeBytesLoaded /
+                                            loadingProgress.expectedTotalBytes!
+                                            : null,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Icon(Icons.error, color: Colors.red);
+                                },
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 12),
                         Text(
-                          item['ProductName'] ?? 'Unnam Item', //wala tong kwenta
+                          item['ProductName'] ?? 'Unnamed Item',
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -109,47 +160,80 @@ class ViewCartPageState extends State<ViewCartPage> {
                         const SizedBox(height: 8),
                         if (item['selectedVariant'] != null)
                           Text(
-                            item['variantDetails'] ? ['CombiName'] ?? 'No Size Selected',
-                            style: TextStyle(color: Colors.grey.shade600),
+                            item['variantDetails']?['CombiName'] ?? 'No Size Selected',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey.shade600,
+                            ),
                           ),
                         if (item['modifiers'] != null && item['modifiers'].isNotEmpty)
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              const SizedBox(height: 8),
                               const Text(
                                 'Modifiers:',
-                                style: TextStyle(color: Colors.grey),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey,
+                                ),
                               ),
                               ...item['modifiers'].map<Widget>((modifier) {
                                 return Text(
                                   '- ${modifier['Name']} (₱${modifier['Price']})',
-                                  style: TextStyle(color: Colors.grey.shade600),
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade600,
+                                  ),
                                 );
                               }).toList(),
                             ],
                           ),
                         if (item['notes'] != null && item['notes'].isNotEmpty)
-                          Text(
-                            'Notes: ${item['notes']}',
-                            style: TextStyle(color: Colors.grey.shade600),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 8),
+                              Text(
+                                'Notes: ${item['notes']}',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
                           ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 12),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.remove),
-                                  onPressed: () => _updateQuantity(index, quantity - 1),
-                                ),
-                                Text('$quantity'),
-                                IconButton(
-                                  icon: const Icon(Icons.add),
-                                  onPressed: () => _updateQuantity(index, quantity + 1),
-                                ),
-                              ],
+                            // Quantity Selector
+                            Container(
+                              decoration: BoxDecoration(
+                                color: AppColors.airforceBlue.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.remove, size: 20),
+                                    onPressed: () => _updateQuantity(index, quantity - 1),
+                                  ),
+                                  Text(
+                                    '$quantity',
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.add, size: 20),
+                                    onPressed: () => _updateQuantity(index, quantity + 1),
+                                  ),
+                                ],
+                              ),
                             ),
+                            // Total Price
                             Text(
                               '₱${totalPrice.toStringAsFixed(2)}',
                               style: const TextStyle(
@@ -159,12 +243,22 @@ class ViewCartPageState extends State<ViewCartPage> {
                             ),
                           ],
                         ),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: () => _editItem(index),
-                            child: const Text('Edit'),
-                          ),
+                        const SizedBox(height: 8),
+                        // Edit and Delete Icons
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit, color: Colors.blue),
+                              tooltip: 'Edit',
+                              onPressed: () => _editItem(index),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              tooltip: 'Delete',
+                              onPressed: () => _deleteItem(index),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -173,6 +267,7 @@ class ViewCartPageState extends State<ViewCartPage> {
               },
             ),
           ),
+          // Total Section
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -202,8 +297,18 @@ class ViewCartPageState extends State<ViewCartPage> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.airforceBlue,
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                   ),
-                  child: const Text('Checkout', style: TextStyle(color: Colors.white)),
+                  child: const Text(
+                    'Checkout',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
               ],
             ),

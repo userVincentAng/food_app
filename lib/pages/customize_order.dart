@@ -53,6 +53,7 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
     var basePrice = widget.product['Price'] ?? widget.itemDetails['Price'];
     var imageUrl = widget.product['ImgUrl'];
 
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -257,6 +258,7 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
                       'notes': _notesController.text.trim(),
                       'quantity': _quantity, // Include quantity in the response
                       'price': finalPrice,
+                      'imageUrl': imageUrl,
                       'ProductName': widget.product['ProductName'] ?? widget.itemDetails['ProductName'],
                       'Id': widget.product['Id'] ?? widget.itemDetails['Id'],
                     });
