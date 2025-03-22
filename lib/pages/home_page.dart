@@ -139,45 +139,27 @@ class HomePageState extends State<HomePage> {
     final modifiers = product['modifiers'] as List<Map<String, dynamic>>? ?? [];
     final totalModifierPrice = modifiers.fold(0.0, (sum, mod) => sum + ((mod['Price'] as num?)?.toDouble() ?? 0.0));
     final finalPrice = variantPrice + totalModifierPrice;
+    final quantity = product['quantity'] as int? ?? 1; // Retrieve quantity
 
     setState(() {
-      // Check if the item already exists in the cart
       final existingItemIndex = orderItems.indexWhere((item) {
-        // Compare the product ID
-        if (item['Id'] != product['Id']) {
-          return false;
-        }
-
-        // Compare the selected variant (if any)
-        if (item['selectedVariant'] != selectedVariantId) {
-          return false;
-        }
-
-        // Compare the modifiers (if any)
-        if (!ListEquality().equals(item['modifiers'], modifiers)) {
-          return false;
-        }
-
-        // Compare the notes (if any)
-        if (item['notes'] != product['notes']) {
-          return false;
-        }
-
-        // If all checks pass, the items are the same
-        return true;
+        return item['Id'] == product['Id'] &&
+            item['selectedVariant'] == selectedVariantId &&
+            ListEquality().equals(item['modifiers'], modifiers) &&
+            item['notes'] == product['notes'];
       });
 
       if (existingItemIndex != -1) {
-        // If the item already exists, increment the quantity
-        orderItems[existingItemIndex]['quantity'] += 1;
+        // If the item already exists, update the quantity
+        orderItems[existingItemIndex]['quantity'] += quantity;
       } else {
-        // If the item does not exist, add it to the list with a unique key
+        // Add a new item with its quantity
         orderItems.add({
           ...product,
           'Id': product['Id'],
           'ProductName': product['ProductName'] ?? 'Unnamed Item',
           'Price': finalPrice,
-          'quantity': 1,
+          'quantity': quantity, // Include quantity
           'notes': product['notes'],
           'selectedVariant': selectedVariantId,
           'variantDetails': selectedVariant,
@@ -185,6 +167,7 @@ class HomePageState extends State<HomePage> {
       }
     });
   }
+
 
   double _calculateTotalAmount() {
     return orderItems.fold(0.0, (double sum, item) {
@@ -349,17 +332,18 @@ class HomePageState extends State<HomePage> {
                                         builder: (context) => CustomizeOrderPanel(itemDetails: itemDetails, product: product),
                                       );
 
-                                      if (!mounted || result == null) return; // Check again after async gap
+                                      if (!mounted || result == null) return;
 
                                       _addToOrder({
                                         ...itemDetails,
-                                        'Id': product['Id'] ,
-                                        'ProductName': product['ProductName'] ?? 'Unnamed Item', // Use 'ProductName'
+                                        'Id': product['Id'],
+                                        'ProductName': product['ProductName'] ?? 'Unnamed Item',
                                         'Price': product['Price'] ?? itemDetails['Price'],
                                         'selectedVariant': result['variantId'],
-                                        'variantDetails': result['variantDetails'], // Include variant details
+                                        'variantDetails': result['variantDetails'],
                                         'modifiers': result['modifiers'],
                                         'notes': result['notes'],
+                                        'quantity': result['quantity'], // Include the quantity
                                       });
 
                                     } catch (e) {

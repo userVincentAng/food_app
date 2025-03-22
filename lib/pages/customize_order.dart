@@ -11,28 +11,21 @@ class CustomizeOrderPanel extends StatefulWidget {
 }
 
 class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
-  int? selectedVariant; // Store SKUId
-  Map<int, Map<String, dynamic>> selectedModifiers = {}; // Track selected modifiers with their details
-  final TextEditingController _notesController = TextEditingController(); // Controller for notes
-  double finalPrice = 0.0; // Track the final price
+  int? selectedVariant;
+  Map<int, Map<String, dynamic>> selectedModifiers = {};
+  final TextEditingController _notesController = TextEditingController();
+  double finalPrice = 0.0;
+  int _quantity = 1; // Quantity state variable
 
   @override
   void initState() {
     super.initState();
-    // Initialize finalPrice with the base price
     finalPrice = widget.product['Price'] ?? widget.itemDetails['Price'];
-  }
-
-  @override
-  void dispose() {
-    _notesController.dispose(); // Dispose the controller
-    super.dispose();
   }
 
   void _updateFinalPrice() {
     double totalPrice = widget.product['Price'] ?? widget.itemDetails['Price'];
 
-    // If a variant is selected, use its price
     if (selectedVariant != null) {
       var selectedVariantDetails = widget.itemDetails['itemVariants'].firstWhere(
             (variant) => variant['SKUId'] == selectedVariant,
@@ -43,14 +36,12 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
       }
     }
 
-    // Add the price of selected modifiers
     selectedModifiers.values.forEach((modifier) {
       totalPrice += modifier['Price'];
     });
 
-    // Update finalPrice and trigger a UI rebuild
     setState(() {
-      finalPrice = totalPrice;
+      finalPrice = totalPrice * _quantity; // Multiply price by quantity
     });
   }
 
@@ -179,9 +170,7 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
                       );
                     }).toList(),
                   ],
-
                   // Add Notes Section
-                  const SizedBox(height: 16),
                   const Text("Add Notes", style: TextStyle(fontWeight: FontWeight.bold)),
                   TextFormField(
                     controller: _notesController,
@@ -190,6 +179,38 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
                       border: OutlineInputBorder(),
                     ),
                     maxLines: 3,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Quantity Selector
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        onPressed: _quantity > 1
+                            ? () {
+                          setState(() {
+                            _quantity--;
+                            _updateFinalPrice();
+                          });
+                        }
+                            : null,
+                        icon: const Icon(Icons.remove_circle, color: Colors.red),
+                      ),
+                      Text(
+                        '$_quantity',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          setState(() {
+                            _quantity++;
+                            _updateFinalPrice();
+                          });
+                        },
+                        icon: const Icon(Icons.add_circle, color: Colors.green),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
                 ],
@@ -234,6 +255,7 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
                           : {},
                       'modifiers': selectedModifiers.values.toList(),
                       'notes': _notesController.text.trim(),
+                      'quantity': _quantity, // Include quantity in the response
                       'price': finalPrice,
                       'ProductName': widget.product['ProductName'] ?? widget.itemDetails['ProductName'],
                       'Id': widget.product['Id'] ?? widget.itemDetails['Id'],
