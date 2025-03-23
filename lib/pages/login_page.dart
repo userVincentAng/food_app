@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:food_app/color.dart';
-import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'merchant_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -15,7 +14,7 @@ class LoginPageState extends State<LoginPage> {
   bool _isPasswordVisible = false;
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final FocusNode _passwordFocusNode = FocusNode(); // Focus for password field
+  final FocusNode _passwordFocusNode = FocusNode();
   bool _isLoading = false;
 
   Future<void> _login() async {
@@ -24,62 +23,53 @@ class LoginPageState extends State<LoginPage> {
     });
 
     try {
-      List<Map<String, String>> credentials = await fetchUserCredentials();
+      final Map<String, String> body = {
+        'grant_type': 'password',
+        'username': _emailController.text.trim(),
+        'password': _passwordController.text.trim(),
+      };
 
-      // Check if the widget is still mounted before proceeding
+      final response = await http.post(
+        Uri.parse('http://test.shoppazing.com/api/token'),
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: body,
+      );
+
       if (!mounted) return;
 
-      String enteredEmail = _emailController.text.trim();
-      String enteredPassword = _passwordController.text.trim();
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = json.decode(response.body);
+        final String accessToken = responseData['access_token'];
 
-      bool isValidUser = credentials.any((user) =>
-      user['email'] == enteredEmail ||
-          user['username'] == enteredEmail &&
-              user['password'] == enteredPassword);
-
-      if (isValidUser) {
-        // Check if the widget is still mounted before navigating
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => MerchantPage()),
-          );
-        }
-      } else if (enteredEmail.isEmpty || enteredPassword.isEmpty) {
-        // Check if the widget is still mounted before showing the SnackBar
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  'Please enter email and password',
-                  style: TextStyle(color: Colors.white)),
-              backgroundColor: AppColors.jet,
-            ),
-          );
-        }
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MerchantPage(accessToken: accessToken),
+          ),
+        );
       } else {
-        // Check if the widget is still mounted before showing the SnackBar
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Invalid email or password', style: TextStyle(color: Colors.white)),
-              backgroundColor: AppColors.jet,
-            ),
-          );
-        }
+        final Map<String, dynamic> errorData = json.decode(response.body);
+        final String errorMessage = errorData['error_description'] ?? 'Login failed';
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage, style: TextStyle(color: Colors.white)),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } catch (error) {
-      // Check if the widget is still mounted before showing the SnackBar
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error fetching user data'),
+            content: Text('Error: $error'),
             backgroundColor: Colors.red,
           ),
         );
       }
     } finally {
-      // Check if the widget is still mounted before updating the state
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -106,7 +96,7 @@ class LoginPageState extends State<LoginPage> {
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
-                  color: AppColors.russianViolet,
+                  color: Colors.indigo,
                 ),
               ),
               SizedBox(height: 10),
@@ -122,9 +112,9 @@ class LoginPageState extends State<LoginPage> {
               // Email Field
               TextField(
                 controller: _emailController,
-                textInputAction: TextInputAction.next, // Moves to the next field
+                textInputAction: TextInputAction.next,
                 onSubmitted: (value) {
-                  FocusScope.of(context).requestFocus(_passwordFocusNode); // Move focus to password field
+                  FocusScope.of(context).requestFocus(_passwordFocusNode);
                 },
                 decoration: InputDecoration(
                   labelText: 'Email or Username',
@@ -141,9 +131,9 @@ class LoginPageState extends State<LoginPage> {
                 controller: _passwordController,
                 focusNode: _passwordFocusNode,
                 obscureText: !_isPasswordVisible,
-                textInputAction: TextInputAction.done, // Triggers login on Enter
+                textInputAction: TextInputAction.done,
                 onSubmitted: (value) {
-                  _login(); // Pressing Enter will call _login()
+                  _login();
                 },
                 decoration: InputDecoration(
                   labelText: 'Password',
@@ -178,7 +168,7 @@ class LoginPageState extends State<LoginPage> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    backgroundColor: AppColors.airforceBlue,
+                    backgroundColor: Colors.indigo,
                   ),
                   child: _isLoading
                       ? CircularProgressIndicator(color: Colors.white)
@@ -196,24 +186,5 @@ class LoginPageState extends State<LoginPage> {
         ),
       ),
     );
-  }
-}
-
-Future<List<Map<String, String>>> fetchUserCredentials() async {
-  final response = await http.get(Uri.parse('https://dummyjson.com/users'));
-
-  if (response.statusCode == 200) {
-    final Map<String, dynamic> data = json.decode(response.body);
-    final List<dynamic> users = data['users'];
-
-    return users.map((user) {
-      return {
-        'email': user['email'].toString(),
-        'username': user['username'].toString(),
-        'password': user['password'].toString(),
-      };
-    }).toList();
-  } else {
-    throw Exception('Failed to load users');
   }
 }

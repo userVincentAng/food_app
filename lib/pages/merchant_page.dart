@@ -6,7 +6,9 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class MerchantPage extends StatefulWidget {
-  const MerchantPage({super.key});
+  final String accessToken; // Add accessToken as a parameter
+
+  const MerchantPage({super.key, required this.accessToken});
 
   @override
   State<MerchantPage> createState() => _MerchantPageState();
@@ -27,8 +29,11 @@ class _MerchantPageState extends State<MerchantPage> {
   }
 
   Future<void> fetchMerchants() async {
-    final response = await http.get(Uri.parse(
-        'https://raw.githubusercontent.com/JayMatawaran/APIs/refs/heads/main/merchants%26pos.json'));
+    final response = await http.get(
+      Uri.parse(
+          'https://raw.githubusercontent.com/JayMatawaran/APIs/refs/heads/main/merchants%26pos.json'),
+    );
+
     if (response.statusCode == 200) {
       setState(() {
         merchants = json.decode(response.body)['merchants'];
@@ -139,12 +144,15 @@ class _MerchantPageState extends State<MerchantPage> {
               SizedBox(
                 width: buttonWidth,
                 child: ElevatedButton(
-                  onPressed: isPosSelected ? () {
+                  onPressed: isPosSelected
+                      ? () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => WelcomePage()),
+                      MaterialPageRoute(
+                          builder: (context) => WelcomePage()),
                     );
-                  } : null,
+                  }
+                      : null,
                   style: ElevatedButton.styleFrom(
                     padding: EdgeInsets.symmetric(vertical: 15),
                     shape: RoundedRectangleBorder(
