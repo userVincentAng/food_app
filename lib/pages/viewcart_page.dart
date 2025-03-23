@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:collection/collection.dart';
+import 'dart:io';
+import 'dart:convert';
 import '../color.dart';
 import 'customize_order.dart';
 
@@ -19,6 +21,8 @@ class ViewCartPage extends StatefulWidget {
 
 class ViewCartPageState extends State<ViewCartPage> {
   late List<Map<String, dynamic>> orderItems;
+  final String serverIP = '192.168.1.14'; // Replace with the server's IP address
+  final int serverPort = 4040;
 
   @override
   void initState() {
@@ -79,6 +83,38 @@ class ViewCartPageState extends State<ViewCartPage> {
       final quantity = item['quantity'] as int? ?? 0;
       return sum + (price * quantity);
     });
+  }
+
+  Future<void> sendOrderDetails() async {
+    final orderDetails = {
+      'items': orderItems,
+      'totalAmount': _calculateTotalAmount(),
+    };
+
+    // Convert the order details to JSON
+    final jsonMessage = jsonEncode(orderDetails);
+
+    try {
+      final socket = await Socket.connect(serverIP, serverPort);
+      print('Connected to server');
+
+      // Send the JSON message
+      socket.write(jsonMessage);
+      print('Order details sent: $jsonMessage');
+
+      await socket.flush();
+      socket.destroy();
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Order sent successfully!')),
+      );
+    } catch (e) {
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to send order: $e')),
+      );
+    }
   }
 
   @override
@@ -291,9 +327,7 @@ class ViewCartPageState extends State<ViewCartPage> {
                   ),
                 ),
                 ElevatedButton(
-                  onPressed: () {
-                    // Handle checkout logic
-                  },
+                  onPressed: sendOrderDetails, // Trigger order sending
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.airforceBlue,
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
