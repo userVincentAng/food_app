@@ -7,9 +7,12 @@ import '../product_card.dart';
 import 'carousel_img.dart';
 import 'customize_order.dart';
 import 'order_summary.dart';
+import 'viewcart_page.dart'; // Import ViewCartPage
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final Map<String, dynamic> connectionDetails; // Add connection details
+
+  const HomePage({super.key, required this.connectionDetails});
 
   @override
   HomePageState createState() => HomePageState();
@@ -167,7 +170,6 @@ class HomePageState extends State<HomePage> {
       }
     });
   }
-
 
   double _calculateTotalAmount() {
     return orderItems.fold(0.0, (double sum, item) {
@@ -376,7 +378,7 @@ class HomePageState extends State<HomePage> {
               onCancel: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => WelcomePage()),
+                  MaterialPageRoute(builder: (context) => WelcomePage(connectionDetails: widget.connectionDetails)),
                 );
               },
               onDone: () {
@@ -387,6 +389,7 @@ class HomePageState extends State<HomePage> {
                   orderItems = updatedItems; // Update the order items
                 });
               },
+              connectionDetails: widget.connectionDetails, // Pass connection details
             ),
           ),
         ],
@@ -394,6 +397,3 @@ class HomePageState extends State<HomePage> {
     );
   }
 }
-
-
-

@@ -10,6 +10,7 @@ class OrderSummaryPanel extends StatelessWidget {
   final VoidCallback onCancel;
   final VoidCallback onDone;
   final Function(List<Map<String, dynamic>>) onOrderUpdated; // Add this callback
+  final Map<String, dynamic> connectionDetails; // Add connection details
 
   const OrderSummaryPanel({
     super.key,
@@ -19,6 +20,7 @@ class OrderSummaryPanel extends StatelessWidget {
     required this.onCancel,
     required this.onDone,
     required this.onOrderUpdated, // Add this parameter
+    required this.connectionDetails
   });
 
   @override
@@ -72,7 +74,8 @@ class OrderSummaryPanel extends StatelessWidget {
                       MaterialPageRoute(
                         builder: (context) => ViewCartPage(
                           orderItems: orderItems,
-                          onOrderUpdated: onOrderUpdated, // Pass the callback
+                          onOrderUpdated: onOrderUpdated, // Pass the callback,
+                          connectionDetails: connectionDetails
                         ),
                       ),
                     );

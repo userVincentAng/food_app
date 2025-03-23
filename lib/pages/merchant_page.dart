@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:food_app/color.dart';
 import 'package:food_app/pages/login_page.dart';
+import 'package:food_app/pages/viewcart_page.dart'; // Import ViewCartPage
 import 'package:food_app/pages/welcome_page.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:io'; // For Socket connection
 
 class MerchantPage extends StatefulWidget {
   final String accessToken; // Add accessToken as a parameter
@@ -21,6 +23,21 @@ class _MerchantPageState extends State<MerchantPage> {
   String? selectedPos;
   bool isMerchantSelected = false;
   bool isPosSelected = false;
+
+  // Controllers for IP address and port
+  final TextEditingController _ipController = TextEditingController();
+  final TextEditingController _portController = TextEditingController();
+
+  // State for connection
+  bool _isConnecting = false;
+  bool _isConnected = false;
+  String _connectionStatus = '';
+
+  // Store the IP and port
+  Map<String, dynamic> connectionDetails = {
+    'ip': '192.168.1.14', // Default IP
+    'port': 4040, // Default port
+  };
 
   @override
   void initState() {
@@ -58,6 +75,57 @@ class _MerchantPageState extends State<MerchantPage> {
       selectedPos = pos;
       isPosSelected = true;
     });
+  }
+
+  // Validate IP address and port
+  bool _isValidInput() {
+    final ip = _ipController.text.trim();
+    final port = _portController.text.trim();
+    return ip.isNotEmpty && port.isNotEmpty;
+  }
+
+  // Attempt to connect to the IP address and port
+  Future<void> _attemptConnection() async {
+    final ip = _ipController.text.trim();
+    final port = int.tryParse(_portController.text.trim());
+
+    if (ip.isEmpty || port == null) {
+      setState(() {
+        _connectionStatus = 'Please enter a valid IP address and port.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isConnecting = true;
+      _connectionStatus = 'Connecting...';
+    });
+
+    try {
+      final socket = await Socket.connect(ip, port, timeout: Duration(seconds: 5));
+      await socket.flush();
+      socket.destroy();
+
+      setState(() {
+        _isConnecting = false;
+        _isConnected = true;
+        _connectionStatus = 'Connected successfully!';
+        connectionDetails['ip'] = ip; // Update IP
+        connectionDetails['port'] = port; // Update port
+      });
+    } on SocketException catch (e) {
+      setState(() {
+        _isConnecting = false;
+        _isConnected = false;
+        _connectionStatus = 'Failed to connect: ${e.message}';
+      });
+    } catch (e) {
+      setState(() {
+        _isConnecting = false;
+        _isConnected = false;
+        _connectionStatus = 'Error: $e';
+      });
+    }
   }
 
   @override
@@ -141,15 +209,89 @@ class _MerchantPageState extends State<MerchantPage> {
                 ),
               ),
               SizedBox(height: 16),
+              // Show IP and Port fields after POS is selected
+              if (isPosSelected)
+                Column(
+                  children: [
+                    SizedBox(
+                      width: buttonWidth,
+                      child: TextField(
+                        controller: _ipController,
+                        decoration: InputDecoration(
+                          labelText: 'Enter IP Address',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onChanged: (value) {
+                          setState(() {}); // Rebuild to update button state
+                        },
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    SizedBox(
+                      width: buttonWidth,
+                      child: TextField(
+                        controller: _portController,
+                        decoration: InputDecoration(
+                          labelText: 'Enter Port',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onChanged: (value) {
+                          setState(() {}); // Rebuild to update button state
+                        },
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    // Connect Button
+                    SizedBox(
+                      width: buttonWidth,
+                      child: ElevatedButton(
+                        onPressed: _isConnecting || !_isValidInput()
+                            ? null
+                            : _attemptConnection,
+                        style: ElevatedButton.styleFrom(
+                          padding: EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          backgroundColor: _isConnected ? Colors.green : AppColors.jet,
+                        ),
+                        child: _isConnecting
+                            ? CircularProgressIndicator(color: Colors.white)
+                            : Text(
+                          _isConnected ? 'Connected' : 'Connect',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      _connectionStatus,
+                      style: TextStyle(
+                        color: _isConnected ? Colors.green : Colors.red,
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                  ],
+                ),
               SizedBox(
                 width: buttonWidth,
                 child: ElevatedButton(
-                  onPressed: isPosSelected
+                  onPressed: _isConnected
                       ? () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                          builder: (context) => WelcomePage()),
+                        builder: (context) => WelcomePage(
+                          connectionDetails: connectionDetails, // Pass connection details
+                        ),
+                      ),
                     );
                   }
                       : null,
@@ -158,13 +300,13 @@ class _MerchantPageState extends State<MerchantPage> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    backgroundColor: isPosSelected ? AppColors.airforceBlue : Colors.grey,
+                    backgroundColor: _isConnected ? AppColors.airforceBlue : Colors.grey,
                   ),
                   child: Text(
                     'Continue',
                     style: TextStyle(
                       fontSize: 18,
-                      color: isMerchantSelected ? Colors.white : Colors.grey,
+                      color: _isConnected ? Colors.white : Colors.grey,
                       fontWeight: FontWeight.bold,
                     ),
                   ),

@@ -8,11 +8,13 @@ import 'customize_order.dart';
 class ViewCartPage extends StatefulWidget {
   final List<Map<String, dynamic>> orderItems;
   final Function(List<Map<String, dynamic>>) onOrderUpdated;
+  final Map<String, dynamic> connectionDetails; // Add connection details
 
   const ViewCartPage({
     super.key,
     required this.orderItems,
     required this.onOrderUpdated,
+    required this.connectionDetails, // Pass connection details
   });
 
   @override
@@ -21,13 +23,15 @@ class ViewCartPage extends StatefulWidget {
 
 class ViewCartPageState extends State<ViewCartPage> {
   late List<Map<String, dynamic>> orderItems;
-  final String serverIP = '192.168.1.14'; // Replace with the server's IP address
-  final int serverPort = 4040;
+  late String serverIP; // Use the passed IP
+  late int serverPort; // Use the passed port
 
   @override
   void initState() {
     super.initState();
     orderItems = List.from(widget.orderItems); // Create a copy of the order items
+    serverIP = widget.connectionDetails['ip']; // Initialize IP
+    serverPort = widget.connectionDetails['port']; // Initialize port
   }
 
   void _updateQuantity(int index, int newQuantity) {
