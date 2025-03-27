@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:collection/collection.dart';
 import 'dart:io';
 import 'dart:convert';
 import '../color.dart';
@@ -100,11 +99,9 @@ class ViewCartPageState extends State<ViewCartPage> {
 
     try {
       final socket = await Socket.connect(serverIP, serverPort);
-      print('Connected to server');
 
       // Send the JSON message
       socket.write(jsonMessage);
-      print('Order details sent: $jsonMessage');
 
       await socket.flush();
       socket.destroy();
@@ -250,7 +247,7 @@ class ViewCartPageState extends State<ViewCartPage> {
                             // Quantity Selector
                             Container(
                               decoration: BoxDecoration(
-                                color: AppColors.airforceBlue.withOpacity(0.1),
+                                color: AppColors.airforceBlue,
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Row(

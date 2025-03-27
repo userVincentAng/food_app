@@ -1,7 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:food_app/color.dart';
 import 'package:food_app/pages/login_page.dart';
-import 'package:food_app/pages/viewcart_page.dart'; // Import ViewCartPage
 import 'package:food_app/pages/welcome_page.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -23,6 +24,7 @@ class _MerchantPageState extends State<MerchantPage> {
   String? selectedPos;
   bool isMerchantSelected = false;
   bool isPosSelected = false;
+  bool _isLoading = false;
 
   // Controllers for IP address and port
   final TextEditingController _ipController = TextEditingController();
@@ -45,18 +47,59 @@ class _MerchantPageState extends State<MerchantPage> {
     fetchMerchants();
   }
 
-  Future<void> fetchMerchants() async {
-    final response = await http.get(
-      Uri.parse(
-          'https://raw.githubusercontent.com/JayMatawaran/APIs/refs/heads/main/merchants%26pos.json'),
-    );
+  void _retryFetchMerchants() {
+    setState(() {
+      merchants = [];
+      selectedMerchant = null;
+      selectedPos = null;
+      isMerchantSelected = false;
+      isPosSelected = false;
+    });
+    fetchMerchants();
+  }
 
-    if (response.statusCode == 200) {
+  Future<void> fetchMerchants() async {
+    setState(() {
+      _isLoading = true;
+      _connectionStatus = 'Loading merchants...';
+    });
+
+    try {
+      final response = await http.get(
+        Uri.parse('https://raw.githubusercontent.com/jayMatawaran/APIs/refs/heads/main/merchants%26pos.json'),
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['merchants'] == null || data['merchants'].isEmpty) {
+          throw Exception('No merchants available');
+        }
+
+        setState(() {
+          merchants = data['merchants'];
+          _connectionStatus = '';
+        });
+      } else {
+        throw Exception('Failed to load merchants: ${response.statusCode}');
+      }
+    } on SocketException {
       setState(() {
-        merchants = json.decode(response.body)['merchants'];
+        _connectionStatus = 'No internet connection';
       });
-    } else {
-      throw Exception('Failed to load merchants');
+    } on TimeoutException {
+      setState(() {
+        _connectionStatus = 'Request timed out';
+      });
+    } catch (e) {
+      setState(() {
+        _connectionStatus = 'Error: ${e.toString()}';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -85,13 +128,22 @@ class _MerchantPageState extends State<MerchantPage> {
   }
 
   // Attempt to connect to the IP address and port
+  // Update _attemptConnection method
   Future<void> _attemptConnection() async {
     final ip = _ipController.text.trim();
     final port = int.tryParse(_portController.text.trim());
 
     if (ip.isEmpty || port == null) {
       setState(() {
-        _connectionStatus = 'Please enter a valid IP address and port.';
+        _connectionStatus = 'Please enter a valid IP address and port';
+      });
+      return;
+    }
+
+    // Validate IP format
+    if (!RegExp(r'^(\d{1,3}\.){3}\d{1,3}$').hasMatch(ip)) {
+      setState(() {
+        _connectionStatus = 'Invalid IP address format';
       });
       return;
     }
@@ -102,7 +154,7 @@ class _MerchantPageState extends State<MerchantPage> {
     });
 
     try {
-      final socket = await Socket.connect(ip, port, timeout: Duration(seconds: 5));
+      final socket = await Socket.connect(ip, port, timeout: const Duration(seconds: 10));
       await socket.flush();
       socket.destroy();
 
@@ -110,219 +162,244 @@ class _MerchantPageState extends State<MerchantPage> {
         _isConnecting = false;
         _isConnected = true;
         _connectionStatus = 'Connected successfully!';
-        connectionDetails['ip'] = ip; // Update IP
-        connectionDetails['port'] = port; // Update port
+        connectionDetails['ip'] = ip;
+        connectionDetails['port'] = port;
       });
     } on SocketException catch (e) {
       setState(() {
         _isConnecting = false;
         _isConnected = false;
-        _connectionStatus = 'Failed to connect: ${e.message}';
+        _connectionStatus = 'Connection failed: ${e.message}';
+      });
+    } on TimeoutException {
+      setState(() {
+        _isConnecting = false;
+        _isConnected = false;
+        _connectionStatus = 'Connection timed out';
       });
     } catch (e) {
       setState(() {
         _isConnecting = false;
         _isConnected = false;
-        _connectionStatus = 'Error: $e';
+        _connectionStatus = 'Error: ${e.toString()}';
       });
     }
   }
 
+  // Update build method to include empty states
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final buttonWidth = screenWidth * 0.8;
+
     return Scaffold(
       body: Center(
         child: SingleChildScrollView(
-          padding: EdgeInsets.all(20),
+          padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              SizedBox(
-                height: 150,
-                width: 150,
-                child: Image.asset('assets/images/logo.png'),
-              ),
-              SizedBox(height: 20),
-              SizedBox(
-                width: buttonWidth,
-                child: ElevatedButton(
-                  onPressed: () {
-                    showModalBottomSheet(
-                      context: context,
-                      builder: (context) {
-                        return MerchantSelectionPanel(
+              const SizedBox(height: 20),
+
+              // Show loading or error status
+              if (_isLoading)
+                const CircularProgressIndicator(),
+              if (_connectionStatus.isNotEmpty && !_isLoading && merchants.isEmpty)
+                ElevatedButton(
+                  onPressed: _retryFetchMerchants,
+                  child: const Text('Retry'),
+                ),
+
+              const SizedBox(height: 20),
+
+              // Merchant selection button (only show if merchants are loaded)
+              if (merchants.isNotEmpty) ...[
+                SizedBox(
+                  width: buttonWidth,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      showModalBottomSheet(
+                        context: context,
+                        builder: (context) => MerchantSelectionPanel(
                           merchants: merchants,
                           onMerchantSelected: onMerchantSelected,
-                        );
-                      },
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      backgroundColor: AppColors.jet,
                     ),
-                    backgroundColor: AppColors.jet,
-                  ),
-                  child: Text(
-                    'Select Merchant',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.white,
+                    child: const Text(
+                      'Select Merchant',
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              SizedBox(height: 16),
-              SizedBox(
-                width: buttonWidth,
-                child: ElevatedButton(
-                  onPressed: isMerchantSelected
-                      ? () {
-                    showModalBottomSheet(
-                      context: context,
-                      builder: (context) {
-                        return PosSelectionPanel(
+                const SizedBox(height: 16),
+              ],
+
+              // POS selection button (only show if merchant is selected)
+              if (isMerchantSelected) ...[
+                SizedBox(
+                  width: buttonWidth,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      showModalBottomSheet(
+                        context: context,
+                        builder: (context) => PosSelectionPanel(
                           posList: posList,
                           onPosSelected: onPosSelected,
-                        );
-                      },
-                    );
-                  }
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    backgroundColor: isMerchantSelected ? AppColors.jet : Colors.grey,
-                  ),
-                  child: Text(
-                    'Select POS',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: isMerchantSelected ? Colors.white : Colors.grey,
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(height: 16),
-              // Show IP and Port fields after POS is selected
-              if (isPosSelected)
-                Column(
-                  children: [
-                    SizedBox(
-                      width: buttonWidth,
-                      child: TextField(
-                        controller: _ipController,
-                        decoration: InputDecoration(
-                          labelText: 'Enter IP Address',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
                         ),
-                        onChanged: (value) {
-                          setState(() {}); // Rebuild to update button state
-                        },
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
                       ),
+                      backgroundColor: AppColors.jet,
                     ),
-                    SizedBox(height: 16),
-                    SizedBox(
-                      width: buttonWidth,
-                      child: TextField(
-                        controller: _portController,
-                        decoration: InputDecoration(
-                          labelText: 'Enter Port',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        onChanged: (value) {
-                          setState(() {}); // Rebuild to update button state
-                        },
-                      ),
-                    ),
-                    SizedBox(height: 16),
-                    // Connect Button
-                    SizedBox(
-                      width: buttonWidth,
-                      child: ElevatedButton(
-                        onPressed: _isConnecting || !_isValidInput()
-                            ? null
-                            : _attemptConnection,
-                        style: ElevatedButton.styleFrom(
-                          padding: EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          backgroundColor: _isConnected ? Colors.green : AppColors.jet,
-                        ),
-                        child: _isConnecting
-                            ? CircularProgressIndicator(color: Colors.white)
-                            : Text(
-                          _isConnected ? 'Connected' : 'Connect',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      _connectionStatus,
+                    child: const Text(
+                      'Select POS',
                       style: TextStyle(
-                        color: _isConnected ? Colors.green : Colors.red,
+                        fontSize: 18,
+                        color: Colors.white,
                       ),
                     ),
-                    SizedBox(height: 16),
-                  ],
+                  ),
                 ),
-              SizedBox(
-                width: buttonWidth,
-                child: ElevatedButton(
-                  onPressed: _isConnected
-                      ? () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => WelcomePage(
-                          connectionDetails: connectionDetails, // Pass connection details
+                const SizedBox(height: 16),
+              ],
+
+              // Show IP/Port fields only if POS is selected
+              if (isPosSelected) ...[
+                const Text(
+                  'Enter Connection Details',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+
+                SizedBox(
+                  width: buttonWidth,
+                  child: TextField(
+                    controller: _ipController,
+                    decoration: InputDecoration(
+                      labelText: 'Enter IP Address',
+                      hintText: 'e.g. 192.168.1.1',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    keyboardType: TextInputType.number,
+                    onChanged: (value) => setState(() {}),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                SizedBox(
+                  width: buttonWidth,
+                  child: TextField(
+                    controller: _portController,
+                    decoration: InputDecoration(
+                      labelText: 'Enter Port',
+                      hintText: 'e.g. 4040',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    keyboardType: TextInputType.number,
+                    onChanged: (value) => setState(() {}),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Connect Button
+                SizedBox(
+                  width: buttonWidth,
+                  child: ElevatedButton(
+                    onPressed: _isConnecting || !_isValidInput() ? null : _attemptConnection,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      backgroundColor: _isConnected ? Colors.green : AppColors.jet,
+                    ),
+                    child: _isConnecting
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : Text(
+                      _isConnected ? 'Connected' : 'Connect',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                Text(
+                  _connectionStatus,
+                  style: TextStyle(
+                    color: _isConnected ? Colors.green : Colors.red,
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              // Continue button (only show if connected)
+              if (_isConnected) ...[
+                SizedBox(
+                  width: buttonWidth,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => WelcomePage(
+                            connectionDetails: connectionDetails,
+                          ),
                         ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                    );
-                  }
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                      backgroundColor: AppColors.airforceBlue,
                     ),
-                    backgroundColor: _isConnected ? AppColors.airforceBlue : Colors.grey,
-                  ),
-                  child: Text(
-                    'Continue',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: _isConnected ? Colors.white : Colors.grey,
-                      fontWeight: FontWeight.bold,
+                    child: const Text(
+                      'Continue',
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              SizedBox(height: 16),
+                const SizedBox(height: 16),
+              ],
+
+              // Logout button
               SizedBox(
                 width: buttonWidth,
                 child: ElevatedButton(
                   onPressed: () {
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(builder: (context) => LoginPage()),
+                      MaterialPageRoute(builder: (context) => const LoginPage()),
                     );
                   },
-                  child: Text('Logout'),
+                  child: const Text('Logout'),
                 ),
               ),
             ],
