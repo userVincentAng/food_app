@@ -2,8 +2,6 @@ import 'dart:convert';
 import 'package:food_app/pages/token_manager.dart';
 import 'package:http/http.dart' as http;
 
-import 'constants.dart';
-
 class ApiService {
   static Future<List<dynamic>> fetchCategories() async {
     final response = await http.post(Uri.parse('http://sellercenter.shoppazing.com/api/shop/getstoreitemsbystoreid'),
