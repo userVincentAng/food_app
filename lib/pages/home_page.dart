@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:collection/collection.dart';
+import 'package:food_app/pages/token_manager.dart';
 import 'package:food_app/pages/welcome_page.dart';
 import '../api_service.dart';
 import '../product_card.dart';
@@ -35,6 +36,8 @@ class HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    print("[DEBUG] HomePage initialized");
+    print("[DEBUG] Current token: ${TokenManager.accessToken}"); // Add this line
     _initConnectivity();
     _loadData();
     Future.delayed(Duration.zero, () {

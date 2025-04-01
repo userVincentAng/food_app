@@ -9,9 +9,9 @@ import 'dart:convert';
 import 'dart:io'; // For Socket connection
 
 class MerchantPage extends StatefulWidget {
-  final String accessToken; // Add accessToken as a parameter
 
-  const MerchantPage({super.key, required this.accessToken});
+
+  const MerchantPage({super.key});
 
   @override
   State<MerchantPage> createState() => _MerchantPageState();

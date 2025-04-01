@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:food_app/pages/token_manager.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'merchant_page.dart';
@@ -74,10 +75,12 @@ class LoginPageState extends State<LoginPage> {
         final Map<String, dynamic> responseData = json.decode(response.body);
         final String accessToken = responseData['access_token'];
 
+        TokenManager.setAccessToken(accessToken);
+        print('Using token: ${TokenManager.accessToken}');
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => MerchantPage(accessToken: accessToken),
+            builder: (context) => MerchantPage(),
           ),
         );
       } else {

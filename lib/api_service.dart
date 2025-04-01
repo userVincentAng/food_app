@@ -1,13 +1,15 @@
 import 'dart:convert';
+import 'package:food_app/pages/token_manager.dart';
 import 'package:http/http.dart' as http;
 
 import 'constants.dart';
 
 class ApiService {
   static Future<List<dynamic>> fetchCategories() async {
-    final response = await http.post(Uri.parse(ApiEndpoints.categoriesUrl),
+    final response = await http.post(Uri.parse('http://sellercenter.shoppazing.com/api/shop/getstoreitemsbystoreid'),
       headers: <String, String>{
         'Content-Type': 'application/json; charset=UTF-8',
+        'Authorization': 'Bearer ${TokenManager.accessToken}',
       },
       body: jsonEncode(<String, String>{
         'storeid': '1',
@@ -37,6 +39,7 @@ class ApiService {
       Uri.parse('http://sellercenter.shoppazing.com/api/shop/getstoreitemsbystoreid'),
       headers: <String, String>{
         'Content-Type': 'application/json; charset=UTF-8',
+        'Authorization': 'Bearer ${TokenManager.accessToken}',
       },
       body: jsonEncode(<String, String>{
         'storeid': storeId,
@@ -62,6 +65,7 @@ class ApiService {
       ),
       headers: <String, String>{
         'Content-Type': 'application/json; charset=UTF-8',
+        'Authorization': 'Bearer ${TokenManager.accessToken}',
       },
       body: jsonEncode({'storeid': storeId, 'itemId': itemId}),
     );
