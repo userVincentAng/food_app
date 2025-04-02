@@ -62,7 +62,7 @@ class LoginPageState extends State<LoginPage> {
       };
 
       final response = await http.post(
-        Uri.parse('http://test.shoppazing.com/api/token'),
+        Uri.parse('http://sellercenter.shoppazing.com/api/token'),
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
