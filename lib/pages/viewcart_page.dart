@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'dart:convert';
+import 'dart:async';
 import '../color.dart';
+import 'package:food_app/services/connection_service.dart';
 import 'customize_order.dart';
 
 class ViewCartPage extends StatefulWidget {
   final List<Map<String, dynamic>> orderItems;
   final Function(List<Map<String, dynamic>>) onOrderUpdated;
-  final Map<String, dynamic> connectionDetails; // Add connection details
+  final Map<String, dynamic> connectionDetails;
 
   const ViewCartPage({
     super.key,
     required this.orderItems,
     required this.onOrderUpdated,
-    required this.connectionDetails, // Pass connection details
+    required this.connectionDetails,
   });
 
   @override
@@ -22,15 +24,86 @@ class ViewCartPage extends StatefulWidget {
 
 class ViewCartPageState extends State<ViewCartPage> {
   late List<Map<String, dynamic>> orderItems;
-  late String serverIP; // Use the passed IP
-  late int serverPort; // Use the passed port
+  late String serverIP;
+  late int serverPort;
+  final ConnectionService _connectionService = ConnectionService();
+  bool _isConnected = false;
+  StreamSubscription<bool>? _connectionSubscription;
 
   @override
   void initState() {
     super.initState();
-    orderItems = List.from(widget.orderItems); // Create a copy of the order items
-    serverIP = widget.connectionDetails['ip']; // Initialize IP
-    serverPort = widget.connectionDetails['port']; // Initialize port
+    orderItems = List.from(widget.orderItems);
+    serverIP = widget.connectionDetails['ip'];
+    serverPort = int.tryParse(widget.connectionDetails['port']) ?? 4040;
+    _initConnection();
+  }
+
+  void _initConnection() {
+    // Cancel any existing subscription
+    _connectionSubscription?.cancel();
+
+    // Set up new subscription
+    _connectionSubscription = _connectionService.connectionStream.listen((
+      isConnected,
+    ) {
+      if (mounted) {
+        setState(() {
+          _isConnected = isConnected;
+        });
+        if (!isConnected) {
+          _showConnectionError();
+        }
+      }
+    });
+
+    // Only connect if not already connected to the same server
+    if (!_connectionService.isConnected ||
+        _connectionService.currentIp != serverIP ||
+        _connectionService.currentPort != serverPort) {
+      _connectionService.connect(serverIP, serverPort);
+    } else {
+      // If already connected, update the local state
+      setState(() {
+        _isConnected = true;
+      });
+    }
+  }
+
+  void _showConnectionError() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Connection Lost'),
+            content: const Text(
+              'The connection to the server has been lost. Please check your connection and try again.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _initConnection();
+                },
+                child: const Text('Retry'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pop(); // Go back to home page
+                },
+                child: const Text('Back'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _connectionSubscription?.cancel();
+    super.dispose();
   }
 
   void _updateQuantity(int index, int newQuantity) {
@@ -52,10 +125,8 @@ class ViewCartPageState extends State<ViewCartPage> {
     final result = await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (context) => CustomizeOrderPanel(
-        itemDetails: item,
-        product: item,
-      ),
+      builder:
+          (context) => CustomizeOrderPanel(itemDetails: item, product: item),
     );
 
     if (result != null) {
@@ -63,10 +134,11 @@ class ViewCartPageState extends State<ViewCartPage> {
         orderItems[index] = {
           ...item,
           'imageUrl': result['imageUrl'],
-          'selectedVariant': result['variantId'], // Store the selected variant name
+          'selectedVariant':
+              result['variantId'], // Store the selected variant name
           'modifiers': result['modifiers'],
           'notes': result['notes'],
-          'Price': result['price']
+          'Price': result['price'],
         };
       });
       widget.onOrderUpdated(orderItems); // Notify parent of changes
@@ -89,32 +161,37 @@ class ViewCartPageState extends State<ViewCartPage> {
   }
 
   Future<void> sendOrderDetails() async {
+    if (!_isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No server connection. Please check your connection and try again.',
+          ),
+        ),
+      );
+      return;
+    }
+
     final orderDetails = {
       'items': orderItems,
       'totalAmount': _calculateTotalAmount(),
     };
 
-    // Convert the order details to JSON
     final jsonMessage = jsonEncode(orderDetails);
 
     try {
       final socket = await Socket.connect(serverIP, serverPort);
-
-      // Send the JSON message
       socket.write(jsonMessage);
-
       await socket.flush();
       socket.destroy();
 
-      // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Order sent successfully!')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Order sent successfully!')));
     } catch (e) {
-      // Show error message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send order: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to send order: $e')));
     }
   }
 
@@ -124,16 +201,24 @@ class ViewCartPageState extends State<ViewCartPage> {
       appBar: AppBar(
         title: const Text(
           'View Cart',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         backgroundColor: AppColors.airforceBlue,
         elevation: 0,
       ),
       body: Column(
         children: [
+          if (!_isConnected)
+            Container(
+              padding: const EdgeInsets.all(8),
+              color: Colors.red,
+              child: const Center(
+                child: Text(
+                  'No Connection',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ),
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
@@ -165,23 +250,35 @@ class ViewCartPageState extends State<ViewCartPage> {
                                 width: 120,
                                 height: 120,
                                 fit: BoxFit.cover,
-                                loadingBuilder: (context, child, loadingProgress) {
+                                loadingBuilder: (
+                                  context,
+                                  child,
+                                  loadingProgress,
+                                ) {
                                   if (loadingProgress == null) return child;
                                   return SizedBox(
                                     width: 120,
                                     height: 120,
                                     child: Center(
                                       child: CircularProgressIndicator(
-                                        value: loadingProgress.expectedTotalBytes != null
-                                            ? loadingProgress.cumulativeBytesLoaded /
-                                            loadingProgress.expectedTotalBytes!
-                                            : null,
+                                        value:
+                                            loadingProgress
+                                                        .expectedTotalBytes !=
+                                                    null
+                                                ? loadingProgress
+                                                        .cumulativeBytesLoaded /
+                                                    loadingProgress
+                                                        .expectedTotalBytes!
+                                                : null,
                                       ),
                                     ),
                                   );
                                 },
                                 errorBuilder: (context, error, stackTrace) {
-                                  return const Icon(Icons.error, color: Colors.red);
+                                  return const Icon(
+                                    Icons.error,
+                                    color: Colors.red,
+                                  );
                                 },
                               ),
                             ),
@@ -197,13 +294,15 @@ class ViewCartPageState extends State<ViewCartPage> {
                         const SizedBox(height: 8),
                         if (item['selectedVariant'] != null)
                           Text(
-                            item['variantDetails']?['CombiName'] ?? 'No Size Selected',
+                            item['variantDetails']?['CombiName'] ??
+                                'No Size Selected',
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.grey.shade600,
                             ),
                           ),
-                        if (item['modifiers'] != null && item['modifiers'].isNotEmpty)
+                        if (item['modifiers'] != null &&
+                            item['modifiers'].isNotEmpty)
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -254,7 +353,11 @@ class ViewCartPageState extends State<ViewCartPage> {
                                 children: [
                                   IconButton(
                                     icon: const Icon(Icons.remove, size: 20),
-                                    onPressed: () => _updateQuantity(index, quantity - 1),
+                                    onPressed:
+                                        () => _updateQuantity(
+                                          index,
+                                          quantity - 1,
+                                        ),
                                   ),
                                   Text(
                                     '$quantity',
@@ -265,7 +368,11 @@ class ViewCartPageState extends State<ViewCartPage> {
                                   ),
                                   IconButton(
                                     icon: const Icon(Icons.add, size: 20),
-                                    onPressed: () => _updateQuantity(index, quantity + 1),
+                                    onPressed:
+                                        () => _updateQuantity(
+                                          index,
+                                          quantity + 1,
+                                        ),
                                   ),
                                 ],
                               ),
@@ -304,7 +411,6 @@ class ViewCartPageState extends State<ViewCartPage> {
               },
             ),
           ),
-          // Total Section
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -328,10 +434,14 @@ class ViewCartPageState extends State<ViewCartPage> {
                   ),
                 ),
                 ElevatedButton(
-                  onPressed: sendOrderDetails, // Trigger order sending
+                  onPressed: _isConnected ? sendOrderDetails : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.airforceBlue,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    backgroundColor:
+                        _isConnected ? AppColors.airforceBlue : Colors.grey,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
                     ),

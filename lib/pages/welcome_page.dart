@@ -3,14 +3,81 @@ import 'package:flutter/material.dart';
 import 'package:food_app/color.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:io'; // For Socket connection
-
+import 'dart:io';
+import 'package:food_app/services/connection_service.dart';
 import 'home_page.dart';
 
-class WelcomePage extends StatelessWidget {
-  final Map<String, dynamic> connectionDetails; // Add connection details
+class WelcomePage extends StatefulWidget {
+  final Map<String, dynamic> connectionDetails;
 
   const WelcomePage({super.key, required this.connectionDetails});
+
+  @override
+  State<WelcomePage> createState() => _WelcomePageState();
+}
+
+class _WelcomePageState extends State<WelcomePage> {
+  final ConnectionService _connectionService = ConnectionService();
+  bool _isConnected = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initConnection();
+  }
+
+  void _initConnection() {
+    final ip = widget.connectionDetails['ip'];
+    final port = int.tryParse(widget.connectionDetails['port']) ?? 4040;
+
+    _connectionService.connect(ip, port);
+    _connectionService.connectionStream.listen((isConnected) {
+      if (mounted) {
+        setState(() {
+          _isConnected = isConnected;
+        });
+        if (!isConnected) {
+          _showConnectionError();
+        }
+      }
+    });
+  }
+
+  void _showConnectionError() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Connection Lost'),
+            content: const Text(
+              'The connection to the server has been lost. Please check your connection and try again.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _initConnection();
+                },
+                child: const Text('Retry'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pop(); // Go back to merchant page
+                },
+                child: const Text('Back'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _connectionService.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,27 +92,50 @@ class WelcomePage extends StatelessWidget {
               child: CarouselImage(),
             ),
           ),
+          if (!_isConnected)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                color: Colors.red,
+                child: const Center(
+                  child: Text(
+                    'No Connection',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ),
+            ),
           Align(
             alignment: Alignment.bottomCenter,
             child: GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => HomePage(
-                      connectionDetails: connectionDetails, // Pass connection details
-                    ),
-                  ),
-                );
-              },
+              onTap:
+                  _isConnected
+                      ? () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder:
+                                (context) => HomePage(
+                                  connectionDetails: widget.connectionDetails,
+                                ),
+                          ),
+                        );
+                      }
+                      : null,
               child: Container(
                 height: 100,
                 width: double.infinity,
-                color: AppColors.airforceBlue.withAlpha((0.7 * 255).round()),
+                color:
+                    _isConnected
+                        ? AppColors.airforceBlue.withAlpha((0.7 * 255).round())
+                        : Colors.grey.withAlpha((0.7 * 255).round()),
                 child: Center(
                   child: Text(
-                    'Touch to start',
-                    style: TextStyle(
+                    _isConnected ? 'Touch to start' : 'No Connection',
+                    style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
@@ -73,9 +163,7 @@ class WelcomePage extends StatelessWidget {
             controller: pinController,
             obscureText: true,
             keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              hintText: 'Enter 6-digit PIN',
-            ),
+            decoration: InputDecoration(hintText: 'Enter 6-digit PIN'),
           ),
           actions: [
             TextButton(
@@ -90,9 +178,9 @@ class WelcomePage extends StatelessWidget {
                   Navigator.pop(context); // Close the PIN dialog
                   _showSettingsDialog(context); // Show settings dialog
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Incorrect PIN')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text('Incorrect PIN')));
                 }
               },
               child: Text('Submit'),
@@ -122,26 +210,24 @@ class WelcomePage extends StatelessWidget {
                 children: [
                   TextField(
                     controller: ipController,
-                    decoration: InputDecoration(
-                      labelText: 'IP Address',
-                    ),
+                    decoration: InputDecoration(labelText: 'IP Address'),
                   ),
                   SizedBox(height: 16),
                   TextField(
                     controller: portController,
-                    decoration: InputDecoration(
-                      labelText: 'Port',
-                    ),
+                    decoration: InputDecoration(labelText: 'Port'),
                     keyboardType: TextInputType.number,
                   ),
                   SizedBox(height: 16),
-                  if (isConnecting)
-                    CircularProgressIndicator(),
+                  if (isConnecting) CircularProgressIndicator(),
                   if (connectionStatus.isNotEmpty)
                     Text(
                       connectionStatus,
                       style: TextStyle(
-                        color: connectionStatus.contains('success') ? Colors.green : Colors.red,
+                        color:
+                            connectionStatus.contains('success')
+                                ? Colors.green
+                                : Colors.red,
                       ),
                     ),
                 ],
@@ -160,7 +246,8 @@ class WelcomePage extends StatelessWidget {
 
                     if (ip.isEmpty || port == null) {
                       setState(() {
-                        connectionStatus = 'Please enter a valid IP address and port.';
+                        connectionStatus =
+                            'Please enter a valid IP address and port.';
                       });
                       return;
                     }
@@ -171,7 +258,11 @@ class WelcomePage extends StatelessWidget {
                     });
 
                     try {
-                      final socket = await Socket.connect(ip, port, timeout: Duration(seconds: 5));
+                      final socket = await Socket.connect(
+                        ip,
+                        port,
+                        timeout: Duration(seconds: 5),
+                      );
                       await socket.flush();
                       socket.destroy();
 
@@ -226,17 +317,26 @@ class CarouselImageState extends State<CarouselImage> {
 
   Future<void> fetchImages() async {
     try {
-      final response = await http.get(Uri.parse('https://raw.githubusercontent.com/JayMatawaran/APIs/refs/heads/main/logo.json'));
+      final response = await http.get(
+        Uri.parse(
+          'https://raw.githubusercontent.com/JayMatawaran/APIs/refs/heads/main/logo.json',
+        ),
+      );
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(response.body);
         final List<dynamic> recipes = data['users'];
 
         final filteredRecipes =
-        recipes.where((recipe) => [2, 4, 7].contains(recipe['id'])).toList();
+            recipes
+                .where((recipe) => [2, 4, 7].contains(recipe['id']))
+                .toList();
 
         setState(() {
-          imageUrls = filteredRecipes.map((recipe) => recipe['image'] as String).toList();
+          imageUrls =
+              filteredRecipes
+                  .map((recipe) => recipe['image'] as String)
+                  .toList();
           isLoading = false;
         });
       } else {
@@ -246,9 +346,9 @@ class CarouselImageState extends State<CarouselImage> {
       setState(() {
         isLoading = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -257,23 +357,24 @@ class CarouselImageState extends State<CarouselImage> {
     return isLoading
         ? Center(child: CircularProgressIndicator())
         : CarouselSlider(
-      options: CarouselOptions(
-        height: double.infinity,
-        autoPlay: true,
-        enlargeCenterPage: true,
-        viewportFraction: 1.0,
-      ),
-      items: imageUrls.map((imageUrl) {
-        return Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            image: DecorationImage(
-              image: NetworkImage(imageUrl),
-              fit: BoxFit.cover,
-            ),
+          options: CarouselOptions(
+            height: double.infinity,
+            autoPlay: true,
+            enlargeCenterPage: true,
+            viewportFraction: 1.0,
           ),
+          items:
+              imageUrls.map((imageUrl) {
+                return Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    image: DecorationImage(
+                      image: NetworkImage(imageUrl),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                );
+              }).toList(),
         );
-      }).toList(),
-    );
   }
 }

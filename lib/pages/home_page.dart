@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:collection/collection.dart';
 import 'package:food_app/pages/token_manager.dart';
 import 'package:food_app/pages/welcome_page.dart';
+import 'package:food_app/services/connection_service.dart';
 import '../api_service.dart';
 import '../product_card.dart';
 import 'carousel_img.dart';
@@ -21,7 +23,9 @@ class HomePage extends StatefulWidget {
 }
 
 class HomePageState extends State<HomePage> {
-  final FixedExtentScrollController _scrollController = FixedExtentScrollController();
+  final FixedExtentScrollController _scrollController =
+      FixedExtentScrollController();
+  final ConnectionService _connectionService = ConnectionService();
   int selectedCategoryIndex = 0;
   String menuTitle = 'Main Menu';
   String logo = '';
@@ -32,19 +36,93 @@ class HomePageState extends State<HomePage> {
   bool isProductsLoading = true;
   List<Map<String, dynamic>> orderItems = [];
   bool _isOnline = true;
+  bool _isConnected = false;
+  StreamSubscription<bool>? _connectionSubscription;
 
   @override
   void initState() {
     super.initState();
     print("[DEBUG] HomePage initialized");
-    print("[DEBUG] Current token: ${TokenManager.accessToken}"); // Add this line
+    print("[DEBUG] Current token: ${TokenManager.accessToken}");
     _initConnectivity();
+    _initConnection();
     _loadData();
     Future.delayed(Duration.zero, () {
       if (_scrollController.hasClients) {
         _scrollController.jumpToItem(100000 ~/ 2);
       }
     });
+  }
+
+  void _initConnection() {
+    final ip = widget.connectionDetails['ip'];
+    final port = int.tryParse(widget.connectionDetails['port']) ?? 4040;
+
+    // Cancel any existing subscription
+    _connectionSubscription?.cancel();
+
+    // Set up new subscription
+    _connectionSubscription = _connectionService.connectionStream.listen((
+      isConnected,
+    ) {
+      if (mounted) {
+        setState(() {
+          _isConnected = isConnected;
+        });
+        if (!isConnected) {
+          _showConnectionError();
+        }
+      }
+    });
+
+    // Only connect if not already connected to the same server
+    if (!_connectionService.isConnected ||
+        _connectionService.currentIp != ip ||
+        _connectionService.currentPort != port) {
+      _connectionService.connect(ip, port);
+    } else {
+      // If already connected, update the local state
+      setState(() {
+        _isConnected = true;
+      });
+    }
+  }
+
+  void _showConnectionError() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Connection Lost'),
+            content: const Text(
+              'The connection to the server has been lost. Please check your connection and try again.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _initConnection();
+                },
+                child: const Text('Retry'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pop(); // Go back to welcome page
+                },
+                child: const Text('Back'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _connectionSubscription?.cancel();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _initConnectivity() async {
@@ -88,10 +166,7 @@ class HomePageState extends State<HomePage> {
           SnackBar(
             content: Text('Error loading data: ${e.toString()}'),
             backgroundColor: Colors.red,
-            action: SnackBarAction(
-              label: 'Retry',
-              onPressed: _loadData,
-            ),
+            action: SnackBarAction(label: 'Retry', onPressed: _loadData),
           ),
         );
       }
@@ -133,10 +208,15 @@ class HomePageState extends State<HomePage> {
 
       // Update UI
       setState(() {
-        categories = categoriesData.map((category) => {
-          'Id': category['Id'],
-          'CategoryName': category['CategoryName'],
-        }).toList();
+        categories =
+            categoriesData
+                .map(
+                  (category) => {
+                    'Id': category['Id'],
+                    'CategoryName': category['CategoryName'],
+                  },
+                )
+                .toList();
         isCategoriesLoading = false;
 
         if (selectedCategory.isEmpty && categories.isNotEmpty) {
@@ -184,15 +264,18 @@ class HomePageState extends State<HomePage> {
   }
 
   void _onCategorySelected(String categoryId, int index) {
-    final isValidCategory = categories.any((cat) => cat['Id'].toString() == categoryId);
+    final isValidCategory = categories.any(
+      (cat) => cat['Id'].toString() == categoryId,
+    );
 
     if (isValidCategory) {
       setState(() {
         selectedCategory = categoryId;
-        menuTitle = categories.firstWhere(
+        menuTitle =
+            categories.firstWhere(
               (cat) => cat['Id'].toString() == categoryId,
-          orElse: () => {'CategoryName': 'Menu'},
-        )['CategoryName'];
+              orElse: () => {'CategoryName': 'Menu'},
+            )['CategoryName'];
         selectedCategoryIndex = index % categories.length;
       });
 
@@ -214,10 +297,12 @@ class HomePageState extends State<HomePage> {
       return products;
     }
 
-    final validCategoryIds = categories.map((cat) => cat['Id'].toString()).toList();
+    final validCategoryIds =
+        categories.map((cat) => cat['Id'].toString()).toList();
     return products.where((product) {
       final productCategoryId = product['CategoryId'].toString();
-      return productCategoryId == selectedCategory && validCategoryIds.contains(productCategoryId);
+      return productCategoryId == selectedCategory &&
+          validCategoryIds.contains(productCategoryId);
     }).toList();
   }
 
@@ -235,7 +320,7 @@ class HomePageState extends State<HomePage> {
 
       // Find the base product first
       final baseProduct = products.firstWhere(
-            (p) => p['Id'].toString() == itemId,
+        (p) => p['Id'].toString() == itemId,
         orElse: () => throw Exception('Product not found'),
       );
 
@@ -246,10 +331,11 @@ class HomePageState extends State<HomePage> {
       final result = await showModalBottomSheet<Map<String, dynamic>>(
         context: context,
         isScrollControlled: true,
-        builder: (context) => CustomizeOrderPanel(
-          itemDetails: itemDetails,
-          product: baseProduct, // Pass the base product from the main list
-        ),
+        builder:
+            (context) => CustomizeOrderPanel(
+              itemDetails: itemDetails,
+              product: baseProduct, // Pass the base product from the main list
+            ),
       );
 
       if (!mounted || result == null) return;
@@ -257,8 +343,11 @@ class HomePageState extends State<HomePage> {
       _addToOrder({
         ...itemDetails,
         'Id': itemId,
-        'ProductName': baseProduct['ProductName'] ?? 'Unnamed Item', // Use name from products list
-        'Price': baseProduct['Price'] ?? 0.0, // Use base price from products list
+        'ProductName':
+            baseProduct['ProductName'] ??
+            'Unnamed Item', // Use name from products list
+        'Price':
+            baseProduct['Price'] ?? 0.0, // Use base price from products list
         'selectedVariant': result['variantId'],
         'variantDetails': result['variantDetails'],
         'modifiers': result['modifiers'],
@@ -269,7 +358,9 @@ class HomePageState extends State<HomePage> {
 
       scaffoldMessenger.showSnackBar(
         SnackBar(
-          content: Text('Added ${result['quantity']} ${baseProduct['ProductName']} to order'),
+          content: Text(
+            'Added ${result['quantity']} ${baseProduct['ProductName']} to order',
+          ),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -290,12 +381,19 @@ class HomePageState extends State<HomePage> {
       final variants = product['itemVariants'] as List<dynamic>? ?? [];
 
       // Calculate variant price if selected
-      final selectedVariant = variants.firstWhereOrNull((v) => v['SKUId'] == selectedVariantId);
-      final variantPrice = (selectedVariant?['Price'] as num?)?.toDouble() ?? basePrice;
+      final selectedVariant = variants.firstWhereOrNull(
+        (v) => v['SKUId'] == selectedVariantId,
+      );
+      final variantPrice =
+          (selectedVariant?['Price'] as num?)?.toDouble() ?? basePrice;
 
       // Calculate modifiers total
-      final modifiers = product['modifiers'] as List<Map<String, dynamic>>? ?? [];
-      final totalModifierPrice = modifiers.fold(0.0, (sum, mod) => sum + ((mod['Price'] as num?)?.toDouble() ?? 0.0));
+      final modifiers =
+          product['modifiers'] as List<Map<String, dynamic>>? ?? [];
+      final totalModifierPrice = modifiers.fold(
+        0.0,
+        (sum, mod) => sum + ((mod['Price'] as num?)?.toDouble() ?? 0.0),
+      );
 
       // Final price calculation
       final finalPrice = variantPrice + totalModifierPrice;
@@ -305,7 +403,10 @@ class HomePageState extends State<HomePage> {
         final existingItemIndex = orderItems.indexWhere((item) {
           return item['Id'] == product['Id'] &&
               item['selectedVariant'] == selectedVariantId &&
-              const DeepCollectionEquality().equals(item['modifiers'], modifiers) &&
+              const DeepCollectionEquality().equals(
+                item['modifiers'],
+                modifiers,
+              ) &&
               item['notes'] == product['notes'];
         });
 
@@ -315,7 +416,9 @@ class HomePageState extends State<HomePage> {
           orderItems.add({
             ...product,
             'Id': product['Id'],
-            'ProductName': product['ProductName'] ?? 'Unnamed Item', // Already from products list
+            'ProductName':
+                product['ProductName'] ??
+                'Unnamed Item', // Already from products list
             'Price': finalPrice,
             'quantity': quantity,
             'notes': product['notes'],
@@ -361,12 +464,14 @@ class HomePageState extends State<HomePage> {
         children: [
           AnimatedContainer(
             duration: const Duration(milliseconds: 300),
-            height: _isOnline ? 0 : 30,
-            color: Colors.red,
-            child: const Center(
+            height: (!_isOnline || !_isConnected) ? 30 : 0,
+            color: !_isConnected ? Colors.red : Colors.orange,
+            child: Center(
               child: Text(
-                'No internet connection',
-                style: TextStyle(color: Colors.white),
+                !_isConnected
+                    ? 'No server connection'
+                    : 'No internet connection',
+                style: const TextStyle(color: Colors.white),
               ),
             ),
           ),
@@ -387,78 +492,101 @@ class HomePageState extends State<HomePage> {
                       CircleAvatar(
                         radius: 30,
                         backgroundColor: Colors.white,
-                        child: logo.isNotEmpty
-                            ? ClipOval(
-                          child: Image.network(
-                            logo,
-                            fit: BoxFit.contain,
-                            width: screenWidth * 0.10,
-                            height: screenWidth * 0.10,
-                            errorBuilder: (context, error, stackTrace) {
-                              return const Icon(Icons.error, color: Colors.red);
-                            },
-                          ),
-                        )
-                            : const Text(
-                          "Logo",
-                          style: TextStyle(fontSize: 16, color: Colors.white),
-                        ),
+                        child:
+                            logo.isNotEmpty
+                                ? ClipOval(
+                                  child: Image.network(
+                                    logo,
+                                    fit: BoxFit.contain,
+                                    width: screenWidth * 0.10,
+                                    height: screenWidth * 0.10,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return const Icon(
+                                        Icons.error,
+                                        color: Colors.red,
+                                      );
+                                    },
+                                  ),
+                                )
+                                : const Text(
+                                  "Logo",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.white,
+                                  ),
+                                ),
                       ),
                       const SizedBox(height: 10),
                       Expanded(
-                        child: isCategoriesLoading
-                            ? const Center(child: CircularProgressIndicator())
-                            : RefreshIndicator(
-                          onRefresh: _fetchCategories,
-                          child: ListWheelScrollView.useDelegate(
-                            controller: _scrollController,
-                            itemExtent: 100,
-                            physics: const FixedExtentScrollPhysics(),
-                            diameterRatio: 2.5,
-                            perspective: 0.0001,
-                            onSelectedItemChanged: (index) {
-                              if (index > 200000 || index < 50000) {
-                                _scrollController.jumpToItem(100000 + (index % categories.length));
-                              }
-                            },
-                            childDelegate: ListWheelChildBuilderDelegate(
-                              builder: (context, index) {
-                                final actualIndex = index % categories.length;
-                                final category = categories[actualIndex];
-                                return GestureDetector(
-                                  onTap: () {
-                                    _onCategorySelected(category['Id'].toString(), actualIndex);
-                                    _scrollController.animateToItem(
-                                      index,
-                                      duration: const Duration(milliseconds: 500),
-                                      curve: Curves.easeInOut,
-                                    );
-                                  },
-                                  child: SizedBox(
-                                    height: 100,
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Text(
-                                          category['CategoryName'],
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
-                                            color: selectedCategoryIndex == actualIndex
-                                                ? Colors.black
-                                                : Colors.grey,
+                        child:
+                            isCategoriesLoading
+                                ? const Center(
+                                  child: CircularProgressIndicator(),
+                                )
+                                : RefreshIndicator(
+                                  onRefresh: _fetchCategories,
+                                  child: ListWheelScrollView.useDelegate(
+                                    controller: _scrollController,
+                                    itemExtent: 100,
+                                    physics: const FixedExtentScrollPhysics(),
+                                    diameterRatio: 2.5,
+                                    perspective: 0.0001,
+                                    onSelectedItemChanged: (index) {
+                                      if (index > 200000 || index < 50000) {
+                                        _scrollController.jumpToItem(
+                                          100000 + (index % categories.length),
+                                        );
+                                      }
+                                    },
+                                    childDelegate: ListWheelChildBuilderDelegate(
+                                      builder: (context, index) {
+                                        final actualIndex =
+                                            index % categories.length;
+                                        final category =
+                                            categories[actualIndex];
+                                        return GestureDetector(
+                                          onTap: () {
+                                            _onCategorySelected(
+                                              category['Id'].toString(),
+                                              actualIndex,
+                                            );
+                                            _scrollController.animateToItem(
+                                              index,
+                                              duration: const Duration(
+                                                milliseconds: 500,
+                                              ),
+                                              curve: Curves.easeInOut,
+                                            );
+                                          },
+                                          child: SizedBox(
+                                            height: 100,
+                                            child: Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                Text(
+                                                  category['CategoryName'],
+                                                  style: TextStyle(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.bold,
+                                                    color:
+                                                        selectedCategoryIndex ==
+                                                                actualIndex
+                                                            ? Colors.black
+                                                            : Colors.grey,
+                                                  ),
+                                                  textAlign: TextAlign.center,
+                                                ),
+                                              ],
+                                            ),
                                           ),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                      ],
+                                        );
+                                      },
+                                      childCount:
+                                          categories.isNotEmpty ? null : 0,
                                     ),
                                   ),
-                                );
-                              },
-                              childCount: categories.isNotEmpty ? null : 0,
-                            ),
-                          ),
-                        ),
+                                ),
                       ),
                     ],
                   ),
@@ -482,50 +610,64 @@ class HomePageState extends State<HomePage> {
                           ),
                         ),
                         Expanded(
-                          child: isProductsLoading
-                              ? const Center(child: CircularProgressIndicator())
-                              : filteredProducts.isEmpty
-                              ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.fastfood, size: 50, color: Colors.grey),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'No products available',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    color: Colors.grey.shade600,
+                          child:
+                              isProductsLoading
+                                  ? const Center(
+                                    child: CircularProgressIndicator(),
+                                  )
+                                  : filteredProducts.isEmpty
+                                  ? Center(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(
+                                          Icons.fastfood,
+                                          size: 50,
+                                          color: Colors.grey,
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          'No products available',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            color: Colors.grey.shade600,
+                                          ),
+                                        ),
+                                        if (!isCategoriesLoading &&
+                                            categories.isNotEmpty)
+                                          TextButton(
+                                            onPressed: _loadData,
+                                            child: const Text('Refresh'),
+                                          ),
+                                      ],
+                                    ),
+                                  )
+                                  : RefreshIndicator(
+                                    onRefresh: _fetchProducts,
+                                    child: GridView.builder(
+                                      padding: const EdgeInsets.all(10),
+                                      gridDelegate:
+                                          const SliverGridDelegateWithMaxCrossAxisExtent(
+                                            maxCrossAxisExtent: 150,
+                                            crossAxisSpacing: 10,
+                                            mainAxisSpacing: 10,
+                                            childAspectRatio: 0.8,
+                                          ),
+                                      itemCount: filteredProducts.length,
+                                      itemBuilder: (context, index) {
+                                        final product = filteredProducts[index];
+                                        return ProductCard(
+                                          product: product,
+                                          onTap:
+                                              (itemId) => _onProductTap(
+                                                itemId,
+                                                context,
+                                              ),
+                                        );
+                                      },
+                                    ),
                                   ),
-                                ),
-                                if (!isCategoriesLoading && categories.isNotEmpty)
-                                  TextButton(
-                                    onPressed: _loadData,
-                                    child: const Text('Refresh'),
-                                  ),
-                              ],
-                            ),
-                          )
-                              : RefreshIndicator(
-                            onRefresh: _fetchProducts,
-                            child: GridView.builder(
-                              padding: const EdgeInsets.all(10),
-                              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                                maxCrossAxisExtent: 150,
-                                crossAxisSpacing: 10,
-                                mainAxisSpacing: 10,
-                                childAspectRatio: 0.8,
-                              ),
-                              itemCount: filteredProducts.length,
-                              itemBuilder: (context, index) {
-                                final product = filteredProducts[index];
-                                return ProductCard(
-                                  product: product,
-                                  onTap: (itemId) => _onProductTap(itemId, context),
-                                );
-                              },
-                            ),
-                          ),
                         ),
                       ],
                     ),
@@ -542,7 +684,10 @@ class HomePageState extends State<HomePage> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => WelcomePage(connectionDetails: widget.connectionDetails),
+                  builder:
+                      (context) => WelcomePage(
+                        connectionDetails: widget.connectionDetails,
+                      ),
                 ),
               );
             },
@@ -559,11 +704,5 @@ class HomePageState extends State<HomePage> {
         ],
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
   }
 }

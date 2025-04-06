@@ -1,16 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:food_app/color.dart';
 import 'package:food_app/pages/login_page.dart';
 import 'package:food_app/pages/welcome_page.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'dart:io'; // For Socket connection
 
 class MerchantPage extends StatefulWidget {
-
-
   const MerchantPage({super.key});
 
   @override
@@ -26,36 +25,33 @@ class _MerchantPageState extends State<MerchantPage> {
   bool isPosSelected = false;
   bool _isLoading = false;
 
-  // Controllers for IP address and port
   final TextEditingController _ipController = TextEditingController();
   final TextEditingController _portController = TextEditingController();
+  final TextEditingController _merchantSearchController = TextEditingController();
+  final TextEditingController _posSearchController = TextEditingController();
 
-  // State for connection
   bool _isConnecting = false;
   bool _isConnected = false;
-  String _connectionStatus = '';
-
-  // Store the IP and port
-  Map<String, dynamic> connectionDetails = {
-    'ip': '192.168.1.14', // Default IP
-    'port': 4040, // Default port
-  };
+  String _connectionStatus = 'Not connected';
+  Socket? _socket;
+  Timer? _keepAliveTimer;
 
   @override
   void initState() {
     super.initState();
+    _ipController.text = '192.168.1.14';
+    _portController.text = '4040';
     fetchMerchants();
   }
 
-  void _retryFetchMerchants() {
-    setState(() {
-      merchants = [];
-      selectedMerchant = null;
-      selectedPos = null;
-      isMerchantSelected = false;
-      isPosSelected = false;
-    });
-    fetchMerchants();
+  @override
+  void dispose() {
+    _disconnectSocket();
+    _ipController.dispose();
+    _portController.dispose();
+    _merchantSearchController.dispose();
+    _posSearchController.dispose();
+    super.dispose();
   }
 
   Future<void> fetchMerchants() async {
@@ -71,34 +67,22 @@ class _MerchantPageState extends State<MerchantPage> {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        if (data['merchants'] == null || data['merchants'].isEmpty) {
-          throw Exception('No merchants available');
-        }
-
         setState(() {
-          merchants = data['merchants'];
-          _connectionStatus = '';
+          merchants = data['merchants'] ?? [];
+          _connectionStatus = merchants.isEmpty ? 'No merchants available' : '';
         });
       } else {
         throw Exception('Failed to load merchants: ${response.statusCode}');
       }
     } on SocketException {
-      setState(() {
-        _connectionStatus = 'No internet connection';
-      });
+      setState(() => _connectionStatus = 'No internet connection');
     } on TimeoutException {
-      setState(() {
-        _connectionStatus = 'Request timed out';
-      });
+      setState(() => _connectionStatus = 'Request timed out');
     } catch (e) {
-      setState(() {
-        _connectionStatus = 'Error: ${e.toString()}';
-      });
+      setState(() => _connectionStatus = 'Error: ${e.toString()}');
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -109,7 +93,10 @@ class _MerchantPageState extends State<MerchantPage> {
       isMerchantSelected = true;
       selectedPos = null;
       isPosSelected = false;
-      posList = merchants.firstWhere((m) => m['merchant_name'] == merchant)['pos_systems'];
+      posList = merchants.firstWhere(
+            (m) => m['merchant_name'] == merchant,
+        orElse: () => {'pos_systems': []},
+      )['pos_systems'];
     });
   }
 
@@ -120,73 +107,133 @@ class _MerchantPageState extends State<MerchantPage> {
     });
   }
 
-  // Validate IP address and port
-  bool _isValidInput() {
+  Future<void> _connectToServer() async {
     final ip = _ipController.text.trim();
-    final port = _portController.text.trim();
-    return ip.isNotEmpty && port.isNotEmpty;
-  }
+    final port = int.tryParse(_portController.text.trim()) ?? 4040;
 
-  // Attempt to connect to the IP address and port
-  // Update _attemptConnection method
-  Future<void> _attemptConnection() async {
-    final ip = _ipController.text.trim();
-    final port = int.tryParse(_portController.text.trim());
-
-    if (ip.isEmpty || port == null) {
-      setState(() {
-        _connectionStatus = 'Please enter a valid IP address and port';
-      });
-      return;
-    }
-
-    // Validate IP format
-    if (!RegExp(r'^(\d{1,3}\.){3}\d{1,3}$').hasMatch(ip)) {
-      setState(() {
-        _connectionStatus = 'Invalid IP address format';
-      });
+    if (ip.isEmpty) {
+      setState(() => _connectionStatus = 'Please enter valid IP');
       return;
     }
 
     setState(() {
       _isConnecting = true;
+      _isConnected = false;
       _connectionStatus = 'Connecting...';
     });
 
     try {
-      final socket = await Socket.connect(ip, port, timeout: const Duration(seconds: 10));
-      await socket.flush();
-      socket.destroy();
+      await _disconnectSocket();
 
-      setState(() {
-        _isConnecting = false;
-        _isConnected = true;
-        _connectionStatus = 'Connected successfully!';
-        connectionDetails['ip'] = ip;
-        connectionDetails['port'] = port;
-      });
+      // Connect with a reasonable timeout
+      _socket = await Socket.connect(ip, port, timeout: const Duration(seconds: 5));
+
+      setState(() => _connectionStatus = 'Connected, initializing...');
+
+      // First create and send the ObjectOutputStream header
+      // This matches Java's ObjectOutputStream protocol
+      final header = ByteData(4)
+        ..setUint8(0, 0xac) // STREAM_MAGIC
+        ..setUint8(1, 0xed) // STREAM_MAGIC
+        ..setUint8(2, 0x00) // STREAM_VERSION
+        ..setUint8(3, 0x05); // STREAM_VERSION
+
+      _socket!.add(header.buffer.asUint8List());
+      await _socket!.flush();
+
+      // Set up response handler
+      _socket!.listen(
+            (Uint8List data) {
+          final response = String.fromCharCodes(data).trim();
+          debugPrint('Received: $response');
+
+          // Handle any server response here
+          setState(() {
+            _isConnecting = false;
+            _isConnected = true;
+            _connectionStatus = 'Connected';
+          });
+          _startKeepAlive();
+        },
+        onError: (error) {
+          debugPrint('Socket error: $error');
+          _handleConnectionError(error.toString());
+        },
+        onDone: () {
+          debugPrint('Socket closed by server');
+          _handleDisconnection();
+        },
+      );
+
+      // No need to send additional handshake as the server doesn't expect one
+      // The ObjectOutputStream header is sufficient
+
+    } on TimeoutException catch (e) {
+      _handleConnectionError('Connection timeout: ${e.message}');
     } on SocketException catch (e) {
-      setState(() {
-        _isConnecting = false;
-        _isConnected = false;
-        _connectionStatus = 'Connection failed: ${e.message}';
-      });
-    } on TimeoutException {
-      setState(() {
-        _isConnecting = false;
-        _isConnected = false;
-        _connectionStatus = 'Connection timed out';
-      });
+      _handleConnectionError('Network error: ${e.message}');
     } catch (e) {
-      setState(() {
-        _isConnecting = false;
-        _isConnected = false;
-        _connectionStatus = 'Error: ${e.toString()}';
-      });
+      _handleConnectionError('Connection error: ${e.toString()}');
     }
   }
 
-  // Update build method to include empty states
+  void _startKeepAlive() {
+    _keepAliveTimer?.cancel();
+    _keepAliveTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      if (_socket != null && _isConnected) {
+        try {
+          // Send a simple keep-alive message
+          _socket!.write('\n');
+          debugPrint('Sent keep-alive');
+        } catch (e) {
+          timer.cancel();
+          _handleDisconnection();
+        }
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
+  Future<void> _disconnectSocket() async {
+    _keepAliveTimer?.cancel();
+    try {
+      await _socket?.flush();
+      await _socket?.close();
+    } catch (e) {
+      debugPrint('Error while disconnecting: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isConnected = false;
+          _isConnecting = false;
+        });
+      }
+      _socket = null;
+    }
+  }
+
+  void _handleConnectionError(String error) {
+    if (mounted) {
+      setState(() {
+        _connectionStatus = error;
+        _isConnecting = false;
+        _isConnected = false;
+      });
+    }
+    _disconnectSocket();
+  }
+
+  void _handleDisconnection() {
+    if (mounted) {
+      setState(() {
+        _connectionStatus = 'Disconnected';
+        _isConnected = false;
+      });
+    }
+    _disconnectSocket();
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -201,104 +248,84 @@ class _MerchantPageState extends State<MerchantPage> {
             children: [
               const SizedBox(height: 20),
 
-              // Show loading or error status
               if (_isLoading)
                 const CircularProgressIndicator(),
+
               if (_connectionStatus.isNotEmpty && !_isLoading && merchants.isEmpty)
-                ElevatedButton(
-                  onPressed: _retryFetchMerchants,
-                  child: const Text('Retry'),
+                Column(
+                  children: [
+                    Text(_connectionStatus),
+                    const SizedBox(height: 10),
+                    ElevatedButton(
+                      onPressed: fetchMerchants,
+                      child: const Text('Retry'),
+                    ),
+                  ],
                 ),
 
-              const SizedBox(height: 20),
-
-              // Merchant selection button (only show if merchants are loaded)
               if (merchants.isNotEmpty) ...[
                 SizedBox(
                   width: buttonWidth,
                   child: ElevatedButton(
-                    onPressed: () {
-                      showModalBottomSheet(
-                        context: context,
-                        builder: (context) => MerchantSelectionPanel(
-                          merchants: merchants,
-                          onMerchantSelected: onMerchantSelected,
-                        ),
-                      );
-                    },
+                    onPressed: () => showModalBottomSheet(
+                      context: context,
+                      builder: (context) => _MerchantSelectionPanel(
+                        merchants: merchants,
+                        onSelected: onMerchantSelected,
+                        searchController: _merchantSearchController,
+                      ),
+                    ),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
                       backgroundColor: AppColors.jet,
                     ),
-                    child: const Text(
-                      'Select Merchant',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.white,
-                      ),
+                    child: Text(
+                      selectedMerchant ?? 'Select Merchant',
+                      style: const TextStyle(color: Colors.white),
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
               ],
 
-              // POS selection button (only show if merchant is selected)
               if (isMerchantSelected) ...[
                 SizedBox(
                   width: buttonWidth,
                   child: ElevatedButton(
-                    onPressed: () {
-                      showModalBottomSheet(
-                        context: context,
-                        builder: (context) => PosSelectionPanel(
-                          posList: posList,
-                          onPosSelected: onPosSelected,
-                        ),
-                      );
-                    },
+                    onPressed: () => showModalBottomSheet(
+                      context: context,
+                      builder: (context) => _PosSelectionPanel(
+                        posList: posList,
+                        onSelected: onPosSelected,
+                        searchController: _posSearchController,
+                      ),
+                    ),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
                       backgroundColor: AppColors.jet,
                     ),
-                    child: const Text(
-                      'Select POS',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.white,
-                      ),
+                    child: Text(
+                      selectedPos ?? 'Select POS',
+                      style: const TextStyle(color: Colors.white),
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
               ],
 
-              // Show IP/Port fields only if POS is selected
               if (isPosSelected) ...[
-                const Text(
-                  'Enter Connection Details',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
+                const Text('Enter Connection Details',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
 
                 SizedBox(
                   width: buttonWidth,
                   child: TextField(
                     controller: _ipController,
-                    decoration: InputDecoration(
-                      labelText: 'Enter IP Address',
-                      hintText: 'e.g. 192.168.1.1',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
+                    decoration: const InputDecoration(
+                      labelText: 'IP Address',
+                      border: OutlineInputBorder(),
                     ),
-                    keyboardType: TextInputType.number,
-                    onChanged: (value) => setState(() {}),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -307,39 +334,28 @@ class _MerchantPageState extends State<MerchantPage> {
                   width: buttonWidth,
                   child: TextField(
                     controller: _portController,
-                    decoration: InputDecoration(
-                      labelText: 'Enter Port',
-                      hintText: 'e.g. 4040',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
+                    decoration: const InputDecoration(
+                      labelText: 'Port',
+                      border: OutlineInputBorder(),
                     ),
                     keyboardType: TextInputType.number,
-                    onChanged: (value) => setState(() {}),
                   ),
                 ),
                 const SizedBox(height: 16),
 
-                // Connect Button
                 SizedBox(
                   width: buttonWidth,
                   child: ElevatedButton(
-                    onPressed: _isConnecting || !_isValidInput() ? null : _attemptConnection,
+                    onPressed: _isConnecting ? null : _connectToServer,
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
                       backgroundColor: _isConnected ? Colors.green : AppColors.jet,
                     ),
                     child: _isConnecting
                         ? const CircularProgressIndicator(color: Colors.white)
                         : Text(
                       _isConnected ? 'Connected' : 'Connect',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        color: Colors.white,
-                      ),
+                      style: const TextStyle(color: Colors.white),
                     ),
                   ),
                 ),
@@ -354,7 +370,6 @@ class _MerchantPageState extends State<MerchantPage> {
                 const SizedBox(height: 16),
               ],
 
-              // Continue button (only show if connected)
               if (_isConnected) ...[
                 SizedBox(
                   width: buttonWidth,
@@ -364,32 +379,27 @@ class _MerchantPageState extends State<MerchantPage> {
                         context,
                         MaterialPageRoute(
                           builder: (context) => WelcomePage(
-                            connectionDetails: connectionDetails,
+                            connectionDetails: {
+                              'ip': _ipController.text.trim(),
+                              'port': _portController.text.trim(),
+                            },
                           ),
                         ),
                       );
                     },
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
                       backgroundColor: AppColors.airforceBlue,
                     ),
                     child: const Text(
                       'Continue',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: TextStyle(color: Colors.white),
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
               ],
 
-              // Logout button
               SizedBox(
                 width: buttonWidth,
                 child: ElevatedButton(
@@ -410,158 +420,156 @@ class _MerchantPageState extends State<MerchantPage> {
   }
 }
 
-class MerchantSelectionPanel extends StatefulWidget {
+class _MerchantSelectionPanel extends StatefulWidget {
   final List<dynamic> merchants;
-  final Function(String) onMerchantSelected;
+  final Function(String) onSelected;
+  final TextEditingController searchController;
 
-  const MerchantSelectionPanel({
-    super.key,
+  const _MerchantSelectionPanel({
     required this.merchants,
-    required this.onMerchantSelected,
+    required this.onSelected,
+    required this.searchController,
   });
 
   @override
-  State<MerchantSelectionPanel> createState() => _MerchantSelectionPanelState();
+  State<_MerchantSelectionPanel> createState() => _MerchantSelectionPanelState();
 }
 
-class _MerchantSelectionPanelState extends State<MerchantSelectionPanel> {
-  List<dynamic> filteredMerchants = [];
-  TextEditingController searchController = TextEditingController();
+class _MerchantSelectionPanelState extends State<_MerchantSelectionPanel> {
+  late List<dynamic> filteredMerchants;
 
   @override
   void initState() {
     super.initState();
     filteredMerchants = widget.merchants;
-    searchController.addListener(_filterMerchants);
+    widget.searchController.addListener(_filterMerchants);
+  }
+
+  @override
+  void dispose() {
+    widget.searchController.removeListener(_filterMerchants);
+    super.dispose();
   }
 
   void _filterMerchants() {
-    final query = searchController.text.toLowerCase();
+    final query = widget.searchController.text.toLowerCase();
     setState(() {
       filteredMerchants = widget.merchants.where((merchant) {
-        final merchantName = merchant['merchant_name'].toLowerCase();
-        return merchantName.contains(query);
+        final name = merchant['merchant_name'].toString().toLowerCase();
+        return name.contains(query);
       }).toList();
     });
   }
 
   @override
-  void dispose() {
-    searchController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: TextField(
-            controller: searchController,
-            decoration: InputDecoration(
-              hintText: 'Search merchants...',
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          TextField(
+            controller: widget.searchController,
+            decoration: const InputDecoration(
+              labelText: 'Search Merchants',
               prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+              border: OutlineInputBorder(),
             ),
           ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            itemCount: filteredMerchants.length,
-            itemBuilder: (context, index) {
-              final merchant = filteredMerchants[index]['merchant_name'];
-              return ListTile(
-                title: Text(merchant),
-                onTap: () {
-                  widget.onMerchantSelected(merchant);
-                  Navigator.pop(context);
-                },
-              );
-            },
+          const SizedBox(height: 10),
+          Expanded(
+            child: ListView.builder(
+              itemCount: filteredMerchants.length,
+              itemBuilder: (context, index) {
+                final merchant = filteredMerchants[index]['merchant_name'].toString();
+                return ListTile(
+                  title: Text(merchant),
+                  onTap: () {
+                    widget.onSelected(merchant);
+                    Navigator.pop(context);
+                  },
+                );
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-class PosSelectionPanel extends StatefulWidget {
+class _PosSelectionPanel extends StatefulWidget {
   final List<dynamic> posList;
-  final Function(String) onPosSelected;
+  final Function(String) onSelected;
+  final TextEditingController searchController;
 
-  const PosSelectionPanel({
-    super.key,
+  const _PosSelectionPanel({
     required this.posList,
-    required this.onPosSelected,
+    required this.onSelected,
+    required this.searchController,
   });
 
   @override
-  State<PosSelectionPanel> createState() => _PosSelectionPanelState();
+  State<_PosSelectionPanel> createState() => _PosSelectionPanelState();
 }
 
-class _PosSelectionPanelState extends State<PosSelectionPanel> {
-  List<dynamic> filteredPosList = [];
-  TextEditingController searchController = TextEditingController();
+class _PosSelectionPanelState extends State<_PosSelectionPanel> {
+  late List<dynamic> filteredPosList;
 
   @override
   void initState() {
     super.initState();
     filteredPosList = widget.posList;
-    searchController.addListener(_filterPosList);
+    widget.searchController.addListener(_filterPosList);
+  }
+
+  @override
+  void dispose() {
+    widget.searchController.removeListener(_filterPosList);
+    super.dispose();
   }
 
   void _filterPosList() {
-    final query = searchController.text.toLowerCase();
+    final query = widget.searchController.text.toLowerCase();
     setState(() {
       filteredPosList = widget.posList.where((pos) {
-        final posName = pos['pos_name'].toLowerCase();
-        return posName.contains(query);
+        final name = pos['pos_name'].toString().toLowerCase();
+        return name.contains(query);
       }).toList();
     });
   }
 
   @override
-  void dispose() {
-    searchController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: TextField(
-            controller: searchController,
-            decoration: InputDecoration(
-              hintText: 'Search POS...',
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          TextField(
+            controller: widget.searchController,
+            decoration: const InputDecoration(
+              labelText: 'Search POS Systems',
               prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+              border: OutlineInputBorder(),
             ),
           ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            itemCount: filteredPosList.length,
-            itemBuilder: (context, index) {
-              final pos = filteredPosList[index]['pos_name'];
-              return ListTile(
-                title: Text(pos),
-                onTap: () {
-                  widget.onPosSelected(pos);
-                  Navigator.pop(context);
-                },
-              );
-            },
+          const SizedBox(height: 10),
+          Expanded(
+            child: ListView.builder(
+              itemCount: filteredPosList.length,
+              itemBuilder: (context, index) {
+                final pos = filteredPosList[index]['pos_name'].toString();
+                return ListTile(
+                  title: Text(pos),
+                  onTap: () {
+                    widget.onSelected(pos);
+                    Navigator.pop(context);
+                  },
+                );
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
