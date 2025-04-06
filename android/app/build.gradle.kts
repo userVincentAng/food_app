@@ -8,7 +8,9 @@ plugins {
 android {
     namespace = "com.example.food_app"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+
+    // Set the NDK version explicitly to match the plugin requirements
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
