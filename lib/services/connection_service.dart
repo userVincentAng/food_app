@@ -18,7 +18,7 @@ class ConnectionService {
 
   Stream<bool> get connectionStream => _connectionController.stream;
   bool get isConnected => _isConnected;
-
+ 
   Future<void> connect(String ip, int port) async {
     if (_isDisposed) {
       throw Exception('ConnectionService has been disposed');
