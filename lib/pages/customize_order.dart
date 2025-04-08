@@ -38,9 +38,9 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
       }
     }
 
-    selectedModifiers.values.forEach((modifier) {
+    for (var modifier in selectedModifiers.values) {
       totalPrice += modifier['Price'];
-    });
+    }
 
     setState(() {
       finalPrice = totalPrice * _quantity; // Multiply price by quantity
@@ -73,7 +73,7 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
                         ClipRRect(
                           borderRadius: BorderRadius.circular(8),
                           child: Image.network(
-                            'https://sellercenter.shoppazing.com/api/${imageUrl}',
+                            'https://sellercenter.shoppazing.com/api/$imageUrl',
                             width: 100,
                             height: 100,
                             fit: BoxFit.cover,
@@ -243,7 +243,7 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withAlpha(26),
                   blurRadius: 5,
                   spreadRadius: 1,
                 ),

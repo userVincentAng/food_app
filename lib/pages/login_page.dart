@@ -76,11 +76,10 @@ class LoginPageState extends State<LoginPage> {
         final String accessToken = responseData['access_token'];
 
         TokenManager.setAccessToken(accessToken);
-        print('Using token: ${TokenManager.accessToken}');
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => MerchantPage(),
+            builder: (context) => const MerchantPage(),
           ),
         );
       } else {
@@ -150,7 +149,7 @@ class LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 80),
                   Image.asset('assets/images/logo.png', height: 150, width: 150),
                   const SizedBox(height: 20),
-                  Text(
+                  const Text(
                     'Welcome Back!',
                     style: TextStyle(
                       fontSize: 24,
@@ -159,7 +158,7 @@ class LoginPageState extends State<LoginPage> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Text(
+                  const Text(
                     'Sign in to continue',
                     style: TextStyle(
                       fontSize: 16,

@@ -8,10 +8,10 @@ class CarouselImg extends StatefulWidget {
   const CarouselImg({required this.onLogoLoaded, super.key});
 
   @override
-  _CarouselImageState createState() => _CarouselImageState();
+  CarouselImageState createState() => CarouselImageState();
 }
 
-class _CarouselImageState extends State<CarouselImg> {
+class CarouselImageState extends State<CarouselImg> {
   List<dynamic> imageUrls = [];
   bool isLoading = true;
   String logo = '';
@@ -44,7 +44,6 @@ class _CarouselImageState extends State<CarouselImg> {
       setState(() {
         isLoading = false;
       });
-      print('Error fetching images: $e');
     }
   }
 

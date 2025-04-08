@@ -29,9 +29,9 @@ class OrderSummaryPanel extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
         boxShadow: [
           BoxShadow(
             color: Colors.black26,
@@ -56,15 +56,15 @@ class OrderSummaryPanel extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       "Order Summary",
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    SizedBox(height: 4),
+                    const SizedBox(height: 4),
                     Text(
                       "Total: ₱ ${totalAmount.toStringAsFixed(2)}  |  Items: $totalQuantity",
                       style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -99,7 +99,7 @@ class OrderSummaryPanel extends StatelessWidget {
             ),
           ),
 
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
 
           // Buttons Row
           Row(
@@ -111,13 +111,13 @@ class OrderSummaryPanel extends StatelessWidget {
                     backgroundColor: AppColors.flame,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
-                    padding: EdgeInsets.symmetric(vertical: 14),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  child: Text("Cancel Order",
+                  child: const Text("Cancel Order",
                       style: TextStyle(fontSize: 16, color: Colors.white)),
                 ),
               ),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton(
                   onPressed: onDone,
@@ -125,9 +125,9 @@ class OrderSummaryPanel extends StatelessWidget {
                     backgroundColor: AppColors.airforceBlue,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
-                    padding: EdgeInsets.symmetric(vertical: 14),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  child: Text("Done",
+                  child: const Text("Done",
                       style: TextStyle(fontSize: 16, color: Colors.white)),
                 ),
               ),

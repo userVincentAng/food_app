@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 class OrderingDeviceRequest {
   final int requestType;
   final String methodName;

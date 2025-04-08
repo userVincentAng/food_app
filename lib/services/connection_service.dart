@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 
 class ConnectionService {
@@ -11,7 +10,7 @@ class ConnectionService {
   Socket? _socket;
   final _connectionController = StreamController<bool>.broadcast();
   Stream<bool> get connectionStream => _connectionController.stream;
-  bool get isConnected => _socket != null && _socket!.done == false;
+  bool get isConnected => _socket != null;
   bool _isConnecting = false;
   bool get isConnecting => _isConnecting;
   String? _currentIp;

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:collection/collection.dart';
-import 'package:food_app/pages/token_manager.dart';
 import 'package:food_app/pages/welcome_page.dart';
 import 'package:food_app/services/connection_service.dart';
 import '../api_service.dart';
@@ -42,8 +41,6 @@ class HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    print("[DEBUG] HomePage initialized");
-    print("[DEBUG] Current token: ${TokenManager.accessToken}");
     _initConnectivity();
     _initConnection();
     _loadData();
@@ -92,29 +89,28 @@ class HomePageState extends State<HomePage> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Connection Lost'),
-            content: const Text(
-              'The connection to the server has been lost. Please check your connection and try again.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  _initConnection();
-                },
-                child: const Text('Retry'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(context).pop(); // Go back to welcome page
-                },
-                child: const Text('Back'),
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: const Text('Connection Lost'),
+        content: const Text(
+          'The connection to the server has been lost. Please check your connection and try again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _initConnection();
+            },
+            child: const Text('Retry'),
           ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).pop(); // Go back to welcome page
+            },
+            child: const Text('Back'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -126,15 +122,18 @@ class HomePageState extends State<HomePage> {
   }
 
   Future<void> _initConnectivity() async {
-    final connectivityResult = await Connectivity().checkConnectivity();
+    final List<ConnectivityResult> connectivityResult =
+        await Connectivity().checkConnectivity();
     setState(() {
-      _isOnline = connectivityResult != ConnectivityResult.none;
+      _isOnline = !connectivityResult.contains(ConnectivityResult.none);
     });
 
-    Connectivity().onConnectivityChanged.listen((result) {
+    Connectivity()
+        .onConnectivityChanged
+        .listen((List<ConnectivityResult> results) {
       if (!mounted) return;
       setState(() {
-        _isOnline = result != ConnectivityResult.none;
+        _isOnline = !results.contains(ConnectivityResult.none);
       });
 
       if (_isOnline && (categories.isEmpty || products.isEmpty)) {
@@ -144,8 +143,9 @@ class HomePageState extends State<HomePage> {
   }
 
   Future<void> _loadData() async {
-    final connectivityResult = await Connectivity().checkConnectivity();
-    if (connectivityResult == ConnectivityResult.none) {
+    final List<ConnectivityResult> connectivityResult =
+        await Connectivity().checkConnectivity();
+    if (connectivityResult.contains(ConnectivityResult.none)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -154,6 +154,7 @@ class HomePageState extends State<HomePage> {
           ),
         );
       }
+      // Load cached data here
       return;
     }
 
@@ -208,15 +209,14 @@ class HomePageState extends State<HomePage> {
 
       // Update UI
       setState(() {
-        categories =
-            categoriesData
-                .map(
-                  (category) => {
-                    'Id': category['Id'],
-                    'CategoryName': category['CategoryName'],
-                  },
-                )
-                .toList();
+        categories = categoriesData
+            .map(
+              (category) => {
+                'Id': category['Id'],
+                'CategoryName': category['CategoryName'],
+              },
+            )
+            .toList();
         isCategoriesLoading = false;
 
         if (selectedCategory.isEmpty && categories.isNotEmpty) {
@@ -271,11 +271,10 @@ class HomePageState extends State<HomePage> {
     if (isValidCategory) {
       setState(() {
         selectedCategory = categoryId;
-        menuTitle =
-            categories.firstWhere(
-              (cat) => cat['Id'].toString() == categoryId,
-              orElse: () => {'CategoryName': 'Menu'},
-            )['CategoryName'];
+        menuTitle = categories.firstWhere(
+          (cat) => cat['Id'].toString() == categoryId,
+          orElse: () => {'CategoryName': 'Menu'},
+        )['CategoryName'];
         selectedCategoryIndex = index % categories.length;
       });
 
@@ -331,11 +330,10 @@ class HomePageState extends State<HomePage> {
       final result = await showModalBottomSheet<Map<String, dynamic>>(
         context: context,
         isScrollControlled: true,
-        builder:
-            (context) => CustomizeOrderPanel(
-              itemDetails: itemDetails,
-              product: baseProduct, // Pass the base product from the main list
-            ),
+        builder: (context) => CustomizeOrderPanel(
+          itemDetails: itemDetails,
+          product: baseProduct, // Pass the base product from the main list
+        ),
       );
 
       if (!mounted || result == null) return;
@@ -343,8 +341,7 @@ class HomePageState extends State<HomePage> {
       _addToOrder({
         ...itemDetails,
         'Id': itemId,
-        'ProductName':
-            baseProduct['ProductName'] ??
+        'ProductName': baseProduct['ProductName'] ??
             'Unnamed Item', // Use name from products list
         'Price':
             baseProduct['Price'] ?? 0.0, // Use base price from products list
@@ -416,8 +413,7 @@ class HomePageState extends State<HomePage> {
           orderItems.add({
             ...product,
             'Id': product['Id'],
-            'ProductName':
-                product['ProductName'] ??
+            'ProductName': product['ProductName'] ??
                 'Unnamed Item', // Already from products list
             'Price': finalPrice,
             'quantity': quantity,
@@ -492,101 +488,98 @@ class HomePageState extends State<HomePage> {
                       CircleAvatar(
                         radius: 30,
                         backgroundColor: Colors.white,
-                        child:
-                            logo.isNotEmpty
-                                ? ClipOval(
-                                  child: Image.network(
-                                    logo,
-                                    fit: BoxFit.contain,
-                                    width: screenWidth * 0.10,
-                                    height: screenWidth * 0.10,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return const Icon(
-                                        Icons.error,
-                                        color: Colors.red,
-                                      );
-                                    },
-                                  ),
-                                )
-                                : const Text(
-                                  "Logo",
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.white,
-                                  ),
+                        child: logo.isNotEmpty
+                            ? ClipOval(
+                                child: Image.network(
+                                  logo,
+                                  fit: BoxFit.contain,
+                                  width: screenWidth * 0.10,
+                                  height: screenWidth * 0.10,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return const Icon(
+                                      Icons.error,
+                                      color: Colors.red,
+                                    );
+                                  },
                                 ),
+                              )
+                            : const Text(
+                                "Logo",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.white,
+                                ),
+                              ),
                       ),
                       const SizedBox(height: 10),
                       Expanded(
-                        child:
-                            isCategoriesLoading
-                                ? const Center(
-                                  child: CircularProgressIndicator(),
-                                )
-                                : RefreshIndicator(
-                                  onRefresh: _fetchCategories,
-                                  child: ListWheelScrollView.useDelegate(
-                                    controller: _scrollController,
-                                    itemExtent: 100,
-                                    physics: const FixedExtentScrollPhysics(),
-                                    diameterRatio: 2.5,
-                                    perspective: 0.0001,
-                                    onSelectedItemChanged: (index) {
-                                      if (index > 200000 || index < 50000) {
-                                        _scrollController.jumpToItem(
-                                          100000 + (index % categories.length),
-                                        );
-                                      }
-                                    },
-                                    childDelegate: ListWheelChildBuilderDelegate(
-                                      builder: (context, index) {
-                                        final actualIndex =
-                                            index % categories.length;
-                                        final category =
-                                            categories[actualIndex];
-                                        return GestureDetector(
-                                          onTap: () {
-                                            _onCategorySelected(
-                                              category['Id'].toString(),
-                                              actualIndex,
-                                            );
-                                            _scrollController.animateToItem(
-                                              index,
-                                              duration: const Duration(
-                                                milliseconds: 500,
-                                              ),
-                                              curve: Curves.easeInOut,
-                                            );
-                                          },
-                                          child: SizedBox(
-                                            height: 100,
-                                            child: Column(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              children: [
-                                                Text(
-                                                  category['CategoryName'],
-                                                  style: TextStyle(
-                                                    fontSize: 14,
-                                                    fontWeight: FontWeight.bold,
-                                                    color:
-                                                        selectedCategoryIndex ==
-                                                                actualIndex
-                                                            ? Colors.black
-                                                            : Colors.grey,
-                                                  ),
-                                                  textAlign: TextAlign.center,
-                                                ),
-                                              ],
+                        child: isCategoriesLoading
+                            ? const Center(
+                                child: CircularProgressIndicator(),
+                              )
+                            : RefreshIndicator(
+                                onRefresh: _fetchCategories,
+                                child: ListWheelScrollView.useDelegate(
+                                  controller: _scrollController,
+                                  itemExtent: 100,
+                                  physics: const FixedExtentScrollPhysics(),
+                                  diameterRatio: 2.5,
+                                  perspective: 0.0001,
+                                  onSelectedItemChanged: (index) {
+                                    if (index > 200000 || index < 50000) {
+                                      _scrollController.jumpToItem(
+                                        100000 + (index % categories.length),
+                                      );
+                                    }
+                                  },
+                                  childDelegate: ListWheelChildBuilderDelegate(
+                                    builder: (context, index) {
+                                      final actualIndex =
+                                          index % categories.length;
+                                      final category = categories[actualIndex];
+                                      return GestureDetector(
+                                        onTap: () {
+                                          _onCategorySelected(
+                                            category['Id'].toString(),
+                                            actualIndex,
+                                          );
+                                          _scrollController.animateToItem(
+                                            index,
+                                            duration: const Duration(
+                                              milliseconds: 500,
                                             ),
+                                            curve: Curves.easeInOut,
+                                          );
+                                        },
+                                        child: SizedBox(
+                                          height: 100,
+                                          child: Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Text(
+                                                category['CategoryName'],
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.bold,
+                                                  color:
+                                                      selectedCategoryIndex ==
+                                                              actualIndex
+                                                          ? Colors.black
+                                                          : Colors.grey,
+                                                ),
+                                                textAlign: TextAlign.center,
+                                              ),
+                                            ],
                                           ),
-                                        );
-                                      },
-                                      childCount:
-                                          categories.isNotEmpty ? null : 0,
-                                    ),
+                                        ),
+                                      );
+                                    },
+                                    childCount:
+                                        categories.isNotEmpty ? null : 0,
                                   ),
                                 ),
+                              ),
                       ),
                     ],
                   ),
@@ -610,64 +603,63 @@ class HomePageState extends State<HomePage> {
                           ),
                         ),
                         Expanded(
-                          child:
-                              isProductsLoading
-                                  ? const Center(
-                                    child: CircularProgressIndicator(),
-                                  )
-                                  : filteredProducts.isEmpty
+                          child: isProductsLoading
+                              ? const Center(
+                                  child: CircularProgressIndicator(),
+                                )
+                              : filteredProducts.isEmpty
                                   ? Center(
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        const Icon(
-                                          Icons.fastfood,
-                                          size: 50,
-                                          color: Colors.grey,
-                                        ),
-                                        const SizedBox(height: 16),
-                                        Text(
-                                          'No products available',
-                                          style: TextStyle(
-                                            fontSize: 18,
-                                            color: Colors.grey.shade600,
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          const Icon(
+                                            Icons.fastfood,
+                                            size: 50,
+                                            color: Colors.grey,
                                           ),
-                                        ),
-                                        if (!isCategoriesLoading &&
-                                            categories.isNotEmpty)
-                                          TextButton(
-                                            onPressed: _loadData,
-                                            child: const Text('Refresh'),
+                                          const SizedBox(height: 16),
+                                          Text(
+                                            'No products available',
+                                            style: TextStyle(
+                                              fontSize: 18,
+                                              color: Colors.grey.shade600,
+                                            ),
                                           ),
-                                      ],
-                                    ),
-                                  )
+                                          if (!isCategoriesLoading &&
+                                              categories.isNotEmpty)
+                                            TextButton(
+                                              onPressed: _loadData,
+                                              child: const Text('Refresh'),
+                                            ),
+                                        ],
+                                      ),
+                                    )
                                   : RefreshIndicator(
-                                    onRefresh: _fetchProducts,
-                                    child: GridView.builder(
-                                      padding: const EdgeInsets.all(10),
-                                      gridDelegate:
-                                          const SliverGridDelegateWithMaxCrossAxisExtent(
-                                            maxCrossAxisExtent: 150,
-                                            crossAxisSpacing: 10,
-                                            mainAxisSpacing: 10,
-                                            childAspectRatio: 0.8,
-                                          ),
-                                      itemCount: filteredProducts.length,
-                                      itemBuilder: (context, index) {
-                                        final product = filteredProducts[index];
-                                        return ProductCard(
-                                          product: product,
-                                          onTap:
-                                              (itemId) => _onProductTap(
-                                                itemId,
-                                                context,
-                                              ),
-                                        );
-                                      },
+                                      onRefresh: _fetchProducts,
+                                      child: GridView.builder(
+                                        padding: const EdgeInsets.all(10),
+                                        gridDelegate:
+                                            const SliverGridDelegateWithMaxCrossAxisExtent(
+                                          maxCrossAxisExtent: 150,
+                                          crossAxisSpacing: 10,
+                                          mainAxisSpacing: 10,
+                                          childAspectRatio: 0.8,
+                                        ),
+                                        itemCount: filteredProducts.length,
+                                        itemBuilder: (context, index) {
+                                          final product =
+                                              filteredProducts[index];
+                                          return ProductCard(
+                                            product: product,
+                                            onTap: (itemId) => _onProductTap(
+                                              itemId,
+                                              context,
+                                            ),
+                                          );
+                                        },
+                                      ),
                                     ),
-                                  ),
                         ),
                       ],
                     ),
@@ -684,10 +676,9 @@ class HomePageState extends State<HomePage> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder:
-                      (context) => WelcomePage(
-                        connectionDetails: widget.connectionDetails,
-                      ),
+                  builder: (context) => WelcomePage(
+                    connectionDetails: widget.connectionDetails,
+                  ),
                 ),
               );
             },

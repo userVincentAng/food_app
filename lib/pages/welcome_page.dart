@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:food_app/color.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:io';
 import 'dart:async';
 import 'package:food_app/services/connection_service.dart';
 import 'home_page.dart';
@@ -106,7 +105,7 @@ class _WelcomePageState extends State<WelcomePage> {
               onLongPress: () {
                 _showPinDialog(context);
               },
-              child: CarouselImage(),
+              child: const CarouselImage(),
             ),
           ),
           if (!_isConnected)
@@ -172,19 +171,19 @@ class _WelcomePageState extends State<WelcomePage> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text('Enter PIN'),
+          title: const Text('Enter PIN'),
           content: TextField(
             controller: pinController,
             obscureText: true,
             keyboardType: TextInputType.number,
-            decoration: InputDecoration(hintText: 'Enter 6-digit PIN'),
+            decoration: const InputDecoration(hintText: 'Enter 6-digit PIN'),
           ),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.pop(context);
               },
-              child: Text('Cancel'),
+              child: const Text('Cancel'),
             ),
             TextButton(
               onPressed: () {
@@ -194,10 +193,10 @@ class _WelcomePageState extends State<WelcomePage> {
                 } else {
                   ScaffoldMessenger.of(
                     context,
-                  ).showSnackBar(SnackBar(content: Text('Incorrect PIN')));
+                  ).showSnackBar(const SnackBar(content: Text('Incorrect PIN')));
                 }
               },
-              child: Text('Submit'),
+              child: const Text('Submit'),
             ),
           ],
         );
@@ -221,22 +220,22 @@ class _WelcomePageState extends State<WelcomePage> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: Text('Settings'),
+              title: const Text('Settings'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextField(
                     controller: ipController,
-                    decoration: InputDecoration(labelText: 'IP Address'),
+                    decoration: const InputDecoration(labelText: 'IP Address'),
                   ),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   TextField(
                     controller: portController,
-                    decoration: InputDecoration(labelText: 'Port'),
+                    decoration: const InputDecoration(labelText: 'Port'),
                     keyboardType: TextInputType.number,
                   ),
-                  SizedBox(height: 16),
-                  if (isConnecting) CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  if (isConnecting) const CircularProgressIndicator(),
                   if (connectionStatus.isNotEmpty)
                     Text(
                       connectionStatus,
@@ -254,7 +253,7 @@ class _WelcomePageState extends State<WelcomePage> {
                     tempConnectionSubscription?.cancel();
                     Navigator.pop(context);
                   },
-                  child: Text('Cancel'),
+                  child: const Text('Cancel'),
                 ),
                 TextButton(
                   onPressed: () async {
@@ -289,7 +288,7 @@ class _WelcomePageState extends State<WelcomePage> {
 
                       if (connected) {
                         // Close the settings dialog after a short delay
-                        Future.delayed(Duration(seconds: 1), () {
+                        Future.delayed(const Duration(seconds: 1), () {
                           Navigator.pop(context); // Close the settings dialog
                           // Update the connection details
                           widget.connectionDetails['ip'] = ip;
@@ -307,7 +306,7 @@ class _WelcomePageState extends State<WelcomePage> {
                       });
                     }
                   },
-                  child: Text('Save'),
+                  child: const Text('Save'),
                 ),
               ],
             );
@@ -373,7 +372,7 @@ class CarouselImageState extends State<CarouselImage> {
   @override
   Widget build(BuildContext context) {
     return isLoading
-        ? Center(child: CircularProgressIndicator())
+        ? const Center(child: CircularProgressIndicator())
         : CarouselSlider(
             options: CarouselOptions(
               height: double.infinity,

@@ -1,11 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:food_app/color.dart';
-import 'package:food_app/models/ordering_device_request.dart';
 import 'package:food_app/pages/home_page.dart';
 import 'package:food_app/pages/customize_order.dart';
 import 'package:food_app/services/connection_service.dart';
