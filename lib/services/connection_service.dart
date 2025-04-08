@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 
 class ConnectionService {
   static final ConnectionService _instance = ConnectionService._internal();
@@ -8,31 +9,26 @@ class ConnectionService {
   ConnectionService._internal();
 
   Socket? _socket;
-  bool _isConnected = false;
   final _connectionController = StreamController<bool>.broadcast();
-  String? currentIp;
-  int? currentPort;
-  bool _isConnecting = false;
-  StreamSubscription<Uint8List>? _socketSubscription;
-  bool _isDisposed = false;
-  Timer? _reconnectTimer;
-  int _reconnectAttempts = 0;
-  static const int maxReconnectAttempts = 3;
-  static const Duration reconnectDelay = Duration(seconds: 2);
-  static const Duration connectionTimeout = Duration(seconds: 10);
-
   Stream<bool> get connectionStream => _connectionController.stream;
-  bool get isConnected => _isConnected;
-  Socket? get socket => _socket;
+  bool get isConnected => _socket != null && _socket!.done == false;
+  bool _isConnecting = false;
   bool get isConnecting => _isConnecting;
+  String? _currentIp;
+  int? _currentPort;
+  Timer? _reconnectTimer;
+  int _connectionAttempts = 0;
+  static const int _maxConnectionAttempts = 3;
+  static const Duration _reconnectDelay = Duration(seconds: 5);
+
+  String? get currentIp => _currentIp;
+  int? get currentPort => _currentPort;
+  Socket? get socket => _socket;
 
   Future<void> connect(String ip, int port) async {
-    if (_isDisposed) {
-      throw Exception('ConnectionService has been disposed');
-    }
-
-    // If already connected to the same server, don't reconnect
-    if (_isConnected && currentIp == ip && currentPort == port) {
+    // If already connected to the same server, do nothing
+    if (isConnected && _currentIp == ip && _currentPort == port) {
+      debugPrint('Already connected to $ip:$port');
       return;
     }
 
@@ -42,137 +38,90 @@ class ConnectionService {
     }
 
     _isConnecting = true;
-    _reconnectAttempts = 0;
-    _cancelReconnectTimer();
+
+    // If connected to a different server, disconnect first
+    if (isConnected) {
+      await disconnect();
+    }
+
+    // Reset connection attempts if connecting to a different server
+    if (_currentIp != ip || _currentPort != port) {
+      _connectionAttempts = 0;
+    }
+
+    _currentIp = ip;
+    _currentPort = port;
 
     try {
-      // Only disconnect if we're connecting to a different server
-      if (currentIp != ip || currentPort != port) {
-        await _disconnect();
-      }
+      _socket =
+          await Socket.connect(ip, port, timeout: const Duration(seconds: 5));
+      _connectionAttempts = 0; // Reset attempts on successful connection
+      _connectionController.add(true);
 
-      currentIp = ip;
-      currentPort = port;
-
-      // Connect with timeout
-      _socket = await Socket.connect(
-        ip,
-        port,
-        timeout: connectionTimeout,
-      ).timeout(
-        connectionTimeout,
-        onTimeout: () {
-          throw TimeoutException('Connection timed out');
-        },
-      );
-
-      // Send ObjectOutputStream header
-      final header = ByteData(4)
-        ..setUint8(0, 0xac) // STREAM_MAGIC
-        ..setUint8(1, 0xed) // STREAM_MAGIC
-        ..setUint8(2, 0x00) // STREAM_VERSION
-        ..setUint8(3, 0x05); // STREAM_VERSION
-
-      _socket!.add(header.buffer.asUint8List());
-      await _socket!.flush();
-
-      // Cancel any existing subscription
-      await _socketSubscription?.cancel();
-
-      // Set up new subscription
-      _socketSubscription = _socket!.listen(
-        (Uint8List data) {
-          _handleConnectionSuccess();
+      // Set up socket listeners
+      _socket!.listen(
+        (data) {
+          debugPrint('Received data: ${String.fromCharCodes(data)}');
         },
         onError: (error) {
-          _handleConnectionError(error.toString());
+          debugPrint('Socket error: $error');
+          _handleDisconnection('Socket error: $error');
         },
         onDone: () {
-          _handleDisconnection();
+          debugPrint('Socket connection closed');
+          _handleDisconnection('Socket connection closed');
         },
       );
 
-      // Reset reconnect attempts on successful connection
-      _reconnectAttempts = 0;
+      debugPrint('Connected to $ip:$port');
     } catch (e) {
-      _handleConnectionError(e.toString());
+      debugPrint('Connection error: $e');
+      _handleDisconnection('Connection error: $e');
     } finally {
       _isConnecting = false;
     }
   }
 
-  void _handleConnectionSuccess() {
-    if (!_isConnected) {
-      _isConnected = true;
-      _connectionController.add(true);
-      _cancelReconnectTimer();
-    }
-  }
+  void _handleDisconnection(String reason) {
+    debugPrint('Handling disconnection: $reason');
+    _socket?.close();
+    _socket = null;
+    _connectionController.add(false);
 
-  void _handleConnectionError(String error) {
-    if (_isConnected) {
-      _isConnected = false;
-      _connectionController.add(false);
-      _disconnect();
-    } else if (_isConnecting) {
-      _isConnecting = false;
-      _connectionController.add(false);
-      _scheduleReconnect();
-    }
-  }
+    // Attempt to reconnect if we haven't exceeded max attempts
+    if (_connectionAttempts < _maxConnectionAttempts &&
+        _currentIp != null &&
+        _currentPort != null) {
+      _connectionAttempts++;
+      debugPrint(
+          'Attempting to reconnect (attempt $_connectionAttempts of $_maxConnectionAttempts)');
 
-  void _handleDisconnection() {
-    if (_isConnected) {
-      _isConnected = false;
-      _connectionController.add(false);
-      _disconnect();
-      _scheduleReconnect();
-    }
-  }
-
-  void _scheduleReconnect() {
-    if (_reconnectAttempts < maxReconnectAttempts &&
-        currentIp != null &&
-        currentPort != null) {
-      _reconnectAttempts++;
-      _cancelReconnectTimer();
-      _reconnectTimer = Timer(reconnectDelay, () {
-        if (!_isConnected && !_isConnecting && !_isDisposed) {
-          connect(currentIp!, currentPort!);
+      _reconnectTimer?.cancel();
+      _reconnectTimer = Timer(_reconnectDelay, () {
+        if (_currentIp != null && _currentPort != null) {
+          connect(_currentIp!, _currentPort!);
         }
       });
+    } else if (_connectionAttempts >= _maxConnectionAttempts) {
+      debugPrint('Max reconnection attempts reached');
+      _connectionAttempts = 0; // Reset for future connection attempts
     }
   }
 
-  void _cancelReconnectTimer() {
+  Future<void> disconnect() async {
+    debugPrint('Disconnecting...');
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
-  }
-
-  Future<void> _disconnect() async {
-    _cancelReconnectTimer();
-    await _socketSubscription?.cancel();
-    try {
-      if (_socket != null) {
-        await _socket!.flush();
-        await _socket!.close();
-      }
-    } catch (e) {
-      // Ignore errors during disconnect
-    } finally {
-      _socket = null;
-      _isConnected = false;
-      _isConnecting = false;
-      _socketSubscription = null;
-    }
+    _connectionAttempts = 0;
+    await _socket?.close();
+    _socket = null;
+    _currentIp = null;
+    _currentPort = null;
+    _connectionController.add(false);
   }
 
   void dispose() {
-    if (!_isDisposed) {
-      _isDisposed = true;
-      _cancelReconnectTimer();
-      _disconnect();
-      _connectionController.close();
-    }
+    disconnect();
+    _connectionController.close();
   }
 }

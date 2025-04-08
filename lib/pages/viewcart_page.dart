@@ -179,7 +179,17 @@ class _ViewCartPageState extends State<ViewCartPage> {
 
       // Send the request
       final socket = _connectionService.socket;
-      if (socket != null) {
+      if (socket == null) {
+        throw Exception(
+            'Socket is not available. Please connect to the server first.');
+      }
+
+      if (!_connectionService.isConnected) {
+        throw Exception(
+            'Socket connection is closed. Please reconnect to the server.');
+      }
+
+      try {
         // Send ObjectOutputStream header first
         final header = ByteData(4)
           ..setUint8(0, 0xac) // STREAM_MAGIC
@@ -205,8 +215,9 @@ class _ViewCartPageState extends State<ViewCartPage> {
           );
           Navigator.pop(context, _cartItems);
         }
-      } else {
-        throw Exception('Socket is not available');
+      } catch (e) {
+        debugPrint('Error sending data: $e');
+        throw Exception('Failed to send data: $e');
       }
     } catch (e) {
       debugPrint('Error during checkout: $e');
