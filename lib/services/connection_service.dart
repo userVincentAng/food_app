@@ -53,37 +53,73 @@ class ConnectionService {
     _currentPort = port;
 
     try {
+      // Connect to the server with a longer timeout
       _socket =
-          await Socket.connect(ip, port, timeout: const Duration(seconds: 5));
+          await Socket.connect(ip, port, timeout: const Duration(seconds: 10));
       _connectionAttempts = 0; // Reset attempts on successful connection
       _connectionController.add(true);
 
-      // Set up socket listeners
+      // Set up socket listeners for BytesWiz POS
       _socket!.listen(
         (data) {
-          debugPrint('Received data: ${String.fromCharCodes(data)}');
+          debugPrint(
+              'Received data from BytesWiz POS: ${String.fromCharCodes(data)}');
+          // Handle specific BytesWiz POS responses
+          _handleBytesWizResponse(data);
         },
         onError: (error) {
-          debugPrint('Socket error: $error');
+          debugPrint('BytesWiz POS socket error: $error');
           _handleDisconnection('Socket error: $error');
         },
         onDone: () {
-          debugPrint('Socket connection closed');
+          debugPrint('BytesWiz POS connection closed');
           _handleDisconnection('Socket connection closed');
         },
       );
 
-      debugPrint('Connected to $ip:$port');
+      // Send initial handshake for BytesWiz POS
+      _sendBytesWizHandshake();
+
+      debugPrint('Connected to BytesWiz POS at $ip:$port');
     } catch (e) {
-      debugPrint('Connection error: $e');
+      debugPrint('Connection error to BytesWiz POS: $e');
       _handleDisconnection('Connection error: $e');
     } finally {
       _isConnecting = false;
     }
   }
 
+  void _sendBytesWizHandshake() {
+    if (_socket == null) return;
+
+    try {
+      // Send BytesWiz POS specific handshake
+      final handshake = [
+        0xac, 0xed, // STREAM_MAGIC
+        0x00, 0x05, // STREAM_VERSION
+        0x77, // TC_BLOCKDATA
+        0x00, 0x0A, // Length of handshake data
+        0x42, 0x79, 0x74, 0x65, 0x73, 0x57, 0x69, 0x7A, // "BytesWiz"
+        0x50, 0x4F, 0x53, // "POS"
+      ];
+
+      _socket!.add(Uint8List.fromList(handshake));
+      debugPrint('Sent BytesWiz POS handshake');
+    } catch (e) {
+      debugPrint('Error sending BytesWiz POS handshake: $e');
+    }
+  }
+
+  void _handleBytesWizResponse(List<int> data) {
+    // Handle specific BytesWiz POS responses
+    if (data.length >= 2 && data[0] == 0xac && data[1] == 0xed) {
+      debugPrint('Received valid BytesWiz POS response');
+      // Process the response based on BytesWiz POS protocol
+    }
+  }
+
   void _handleDisconnection(String reason) {
-    debugPrint('Handling disconnection: $reason');
+    debugPrint('Handling BytesWiz POS disconnection: $reason');
     _socket?.close();
     _socket = null;
     _connectionController.add(false);
@@ -94,7 +130,7 @@ class ConnectionService {
         _currentPort != null) {
       _connectionAttempts++;
       debugPrint(
-          'Attempting to reconnect (attempt $_connectionAttempts of $_maxConnectionAttempts)');
+          'Attempting to reconnect to BytesWiz POS (attempt $_connectionAttempts of $_maxConnectionAttempts)');
 
       _reconnectTimer?.cancel();
       _reconnectTimer = Timer(_reconnectDelay, () {
@@ -103,13 +139,13 @@ class ConnectionService {
         }
       });
     } else if (_connectionAttempts >= _maxConnectionAttempts) {
-      debugPrint('Max reconnection attempts reached');
+      debugPrint('Max reconnection attempts to BytesWiz POS reached');
       _connectionAttempts = 0; // Reset for future connection attempts
     }
   }
 
   Future<void> disconnect() async {
-    debugPrint('Disconnecting...');
+    debugPrint('Disconnecting from BytesWiz POS...');
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
     _connectionAttempts = 0;

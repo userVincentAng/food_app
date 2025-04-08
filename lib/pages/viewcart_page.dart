@@ -76,6 +76,11 @@ class _ViewCartPageState extends State<ViewCartPage> {
       return;
     }
 
+    // If connected to a different server, disconnect first
+    if (_connectionService.isConnected) {
+      _connectionService.disconnect();
+    }
+
     // Try to connect if not already connected
     try {
       _connectionService.connect(
@@ -97,6 +102,8 @@ class _ViewCartPageState extends State<ViewCartPage> {
       setState(() {
         _errorMessage = 'Not connected to server. Please connect first.';
       });
+      // Try to reconnect
+      _initConnection();
       return;
     }
 
@@ -138,6 +145,13 @@ class _ViewCartPageState extends State<ViewCartPage> {
         'CartOrderNo': '',
       };
 
+      // Get the socket
+      final socket = _connectionService.socket;
+      if (socket == null) {
+        throw Exception(
+            'Socket is not available. Please connect to the server first.');
+      }
+
       // Create the request in the format expected by Java server
       final requestMap = {
         'RequestType': 1,
@@ -145,89 +159,40 @@ class _ViewCartPageState extends State<ViewCartPage> {
         'SavedCartItems': savedCartItem,
       };
 
-      // Debug print the request
-      debugPrint('=== Order Request Details ===');
-      debugPrint('Request Type: ${requestMap['RequestType']}');
-      debugPrint('Method Name: ${requestMap['MethodName']}');
-      debugPrint('Saved Cart Item:');
-      debugPrint('  - GUID: ${savedCartItem['GuidId']}');
-      debugPrint('  - Name: ${savedCartItem['Name']}');
-      debugPrint('  - Comments: ${savedCartItem['Comments']}');
-      debugPrint('  - Total: ${savedCartItem['Total']}');
-      final cartItems = savedCartItem['cartitem'] as List;
-      debugPrint('  - Cart Items Count: ${cartItems.length}');
-      debugPrint('  - Cart Items:');
-      for (var item in cartItems) {
-        debugPrint(
-            '    * ${item['ProductName']} - ₱${item['Price']} x ${item['quantity']}');
-        if (item['modifiers'] != null) {
-          debugPrint('      Modifiers:');
-          for (var mod in item['modifiers']) {
-            debugPrint('        • ${mod['Name']} - ₱${mod['Price']}');
-          }
-        }
-        if (item['notes'] != null && item['notes'].isNotEmpty) {
-          debugPrint('      Notes: ${item['notes']}');
-        }
-      }
-      debugPrint('===========================');
-
-      // Convert to JSON and send
+      // Convert to JSON
       final jsonString = jsonEncode(requestMap);
       debugPrint('JSON being sent: $jsonString');
-      final bytes = utf8.encode(jsonString);
 
-      // Send the request
-      final socket = _connectionService.socket;
-      if (socket == null) {
-        throw Exception(
-            'Socket is not available. Please connect to the server first.');
-      }
+      // Create a UTF-8 encoded byte array of the JSON string
+      final jsonBytes = utf8.encode(jsonString);
 
-      if (!_connectionService.isConnected) {
-        throw Exception(
-            'Socket connection is closed. Please reconnect to the server.');
-      }
+      // Create the complete message with length prefix
+      final messageLength = jsonBytes.length;
+      final lengthBytes = ByteData(4)..setInt32(0, messageLength, Endian.big);
 
-      try {
-        // Send ObjectOutputStream header first
-        final header = ByteData(4)
-          ..setUint8(0, 0xac) // STREAM_MAGIC
-          ..setUint8(1, 0xed) // STREAM_MAGIC
-          ..setUint8(2, 0x00) // STREAM_VERSION
-          ..setUint8(3, 0x05); // STREAM_VERSION
+      debugPrint('Sending message length: $messageLength bytes');
 
-        debugPrint('Sending header: ${header.buffer.asUint8List()}');
-        socket.add(header.buffer.asUint8List());
-        await socket.flush();
+      // Send the length first (4 bytes)
+      socket.add(lengthBytes.buffer.asUint8List());
+      await socket.flush();
 
-        // Send the actual data
-        debugPrint('Sending data bytes: ${bytes.length} bytes');
-        socket.add(bytes);
-        await socket.flush();
+      // Send the actual JSON data
+      socket.add(jsonBytes);
+      await socket.flush();
 
-        // Wait for a short time to ensure the data is sent
-        await Future.delayed(const Duration(milliseconds: 500));
+      // Wait for server response
+      debugPrint('Waiting for server response...');
+      await Future.delayed(const Duration(seconds: 1));
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Order sent successfully')),
-          );
-          Navigator.pop(context, _cartItems);
-        }
-      } catch (e) {
-        debugPrint('Error sending data: $e');
-        throw Exception('Failed to send data: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Order sent successfully')),
+        );
+        Navigator.pop(context, _cartItems);
       }
     } catch (e) {
-      debugPrint('Error during checkout: $e');
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'Failed to send order: ${e.toString()}';
-        });
-        // Try to reconnect
-        _initConnection();
-      }
+      debugPrint('Error sending data: $e');
+      throw Exception('Failed to send data: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -307,7 +272,7 @@ class _ViewCartPageState extends State<ViewCartPage> {
       ),
       body: Column(
         children: [
-          if (_errorMessage != null)
+          if (_errorMessage != null && !_isConnected)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
@@ -363,9 +328,9 @@ class _ViewCartPageState extends State<ViewCartPage> {
                     ),
                     child: _isLoading
                         ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text(
-                            'Checkout',
-                            style: TextStyle(color: Colors.white),
+                        : Text(
+                            _isConnected ? 'Checkout' : 'Not Connected',
+                            style: const TextStyle(color: Colors.white),
                           ),
                   ),
                 ),
