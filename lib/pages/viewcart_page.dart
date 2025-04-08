@@ -28,8 +28,8 @@ class ViewCartPage extends StatefulWidget {
 }
 
 class _ViewCartPageState extends State<ViewCartPage> {
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _commentsController = TextEditingController();
+  final TextEditingController _nameController =
+      TextEditingController(text: 'PJ');
   bool _isLoading = false;
   bool _isConnected = false;
   StreamSubscription<bool>? _connectionSubscription;
@@ -92,13 +92,6 @@ class _ViewCartPageState extends State<ViewCartPage> {
   }
 
   Future<void> _handleCheckout() async {
-    if (_nameController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your name')),
-      );
-      return;
-    }
-
     if (!_isConnected) {
       setState(() {
         _errorMessage = 'Not connected to server. Please connect first.';
@@ -113,45 +106,104 @@ class _ViewCartPageState extends State<ViewCartPage> {
 
     try {
       // Create SavedCartItem
-      final savedCartItem = SavedCartItem(
-        guidId: const Uuid().v4(),
-        name: _nameController.text,
-        comments: _commentsController.text,
-        cartItems: _cartItems,
-        savedDate: DateTime.now().toIso8601String(),
-        savedBy: _nameController.text,
-        savedByUserId: 'user_${const Uuid().v4()}',
-        todaysOrderNo: DateTime.now().millisecondsSinceEpoch.toString(),
-        openTicketStatusId: 1,
-        total: widget.totalAmount,
-      );
+      final savedCartItem = {
+        'GuidId': const Uuid().v4(),
+        'Name': 'PJ',
+        'Comments': '', // Empty comments as per requirement
+        'cartitem': _cartItems
+            .map((item) => {
+                  'ProductName': item['ProductName'],
+                  'Price': item['Price'],
+                  'quantity': item['quantity'],
+                  'ImgUrl': item['ImgUrl'],
+                })
+            .toList(),
+        'SavedDate': DateTime.now().toIso8601String(),
+        'SavedBy': 'PJ',
+        'SavedByUserId': 'user_${const Uuid().v4()}',
+        'TodaysOrderNo': DateTime.now().millisecondsSinceEpoch.toString(),
+        'OpenTicketStatusId': 1,
+        'Total': widget.totalAmount,
+        'IsDeleted': false,
+        'DeletedBy': '',
+        'IsSynced': false,
+        'IsBillPrinted': false,
+        'IsOSPrinted': false,
+        'IsMerged': false,
+        'MergedChildTables': [],
+        'TextDuration': '',
+        'CartOrderNo': '',
+      };
 
-      // Create OrderingDeviceRequest
-      final request = OrderingDeviceRequest(
-        requestType: 1,
-        savedCartItems: savedCartItem,
-      );
+      // Create the request in the format expected by Java server
+      final requestMap = {
+        'RequestType': 1,
+        'MethodName': 'newOrder',
+        'SavedCartItems': savedCartItem,
+      };
 
-      // Convert to JSON
-      final jsonString = jsonEncode(request.toJson());
+      // Debug print the request
+      debugPrint('=== Order Request Details ===');
+      debugPrint('Request Type: ${requestMap['RequestType']}');
+      debugPrint('Method Name: ${requestMap['MethodName']}');
+      debugPrint('Saved Cart Item:');
+      debugPrint('  - GUID: ${savedCartItem['GuidId']}');
+      debugPrint('  - Name: ${savedCartItem['Name']}');
+      debugPrint('  - Comments: ${savedCartItem['Comments']}');
+      debugPrint('  - Total: ${savedCartItem['Total']}');
+      final cartItems = savedCartItem['cartitem'] as List;
+      debugPrint('  - Cart Items Count: ${cartItems.length}');
+      debugPrint('  - Cart Items:');
+      for (var item in cartItems) {
+        debugPrint(
+            '    * ${item['ProductName']} - ₱${item['Price']} x ${item['quantity']}');
+      }
+      debugPrint('===========================');
+
+      // Convert to JSON and send
+      final jsonString = jsonEncode(requestMap);
+      debugPrint('JSON being sent: $jsonString');
       final bytes = utf8.encode(jsonString);
-      final lengthBytes = ByteData(4)..setInt32(0, bytes.length, Endian.big);
 
-      _connectionService.socket?.add(lengthBytes.buffer.asUint8List());
-      _connectionService.socket?.add(bytes);
-      await _connectionService.socket?.flush();
+      // Send the request
+      final socket = _connectionService.socket;
+      if (socket != null) {
+        // Send ObjectOutputStream header first
+        final header = ByteData(4)
+          ..setUint8(0, 0xac) // STREAM_MAGIC
+          ..setUint8(1, 0xed) // STREAM_MAGIC
+          ..setUint8(2, 0x00) // STREAM_VERSION
+          ..setUint8(3, 0x05); // STREAM_VERSION
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Order sent successfully')),
-        );
-        Navigator.pop(context, _cartItems);
+        debugPrint('Sending header: ${header.buffer.asUint8List()}');
+        socket.add(header.buffer.asUint8List());
+        await socket.flush();
+
+        // Send the actual data
+        debugPrint('Sending data bytes: ${bytes.length} bytes');
+        socket.add(bytes);
+        await socket.flush();
+
+        // Wait for a short time to ensure the data is sent
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Order sent successfully')),
+          );
+          Navigator.pop(context, _cartItems);
+        }
+      } else {
+        throw Exception('Socket is not available');
       }
     } catch (e) {
+      debugPrint('Error during checkout: $e');
       if (mounted) {
         setState(() {
           _errorMessage = 'Failed to send order: ${e.toString()}';
         });
+        // Try to reconnect
+        _initConnection();
       }
     } finally {
       if (mounted) {
@@ -165,8 +217,8 @@ class _ViewCartPageState extends State<ViewCartPage> {
   @override
   void dispose() {
     _nameController.dispose();
-    _commentsController.dispose();
     _connectionSubscription?.cancel();
+    // Don't close the socket here, let the ConnectionService handle it
     super.dispose();
   }
 
@@ -227,23 +279,6 @@ class _ViewCartPageState extends State<ViewCartPage> {
             padding: const EdgeInsets.all(16.0),
             child: Column(
               children: [
-                TextField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Your Name',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _commentsController,
-                  decoration: const InputDecoration(
-                    labelText: 'Additional Comments',
-                    border: OutlineInputBorder(),
-                  ),
-                  maxLines: 3,
-                ),
-                const SizedBox(height: 16),
                 Text(
                   'Total Amount: ₱${widget.totalAmount.toStringAsFixed(2)}',
                   style: const TextStyle(

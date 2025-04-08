@@ -2,30 +2,33 @@ import 'package:flutter/foundation.dart';
 
 class OrderingDeviceRequest {
   final int requestType;
-  final SavedCartItem? savedCartItems;
+  final String methodName;
+  final SavedCartItem savedCartItems;
   final dynamic
       predefinedTicket; // Using dynamic for now since MerchantPreDefTickets is not defined
 
   OrderingDeviceRequest({
     required this.requestType,
-    this.savedCartItems,
+    required this.methodName,
+    required this.savedCartItems,
     this.predefinedTicket,
   });
 
   Map<String, dynamic> toJson() {
     return {
-      'RequestType': requestType,
-      'savedCartItems': savedCartItems?.toJson(),
+      'requestType': requestType,
+      'methodName': methodName,
+      'savedCartItems': savedCartItems.toJson(),
       'predifinedTicket': predefinedTicket,
     };
   }
 }
 
 class SavedCartItem {
-  final String? guidId;
+  final String guidId;
   final String name;
   final String comments;
-  final List<dynamic> cartItems;
+  final List<Map<String, dynamic>> cartItems;
   final String savedDate;
   final String savedBy;
   final String savedByUserId;
@@ -43,7 +46,7 @@ class SavedCartItem {
   final String? cartOrderNo;
 
   SavedCartItem({
-    this.guidId,
+    required this.guidId,
     required this.name,
     required this.comments,
     required this.cartItems,
@@ -66,25 +69,25 @@ class SavedCartItem {
 
   Map<String, dynamic> toJson() {
     return {
-      'GuidId': guidId,
-      'Name': name,
-      'Comments': comments,
-      'cartitem': cartItems,
-      'SavedDate': savedDate,
-      'SavedBy': savedBy,
-      'SavedByUserId': savedByUserId,
-      'TodaysOrderNo': todaysOrderNo,
-      'IsDeleted': isDeleted,
-      'DeletedBy': deletedBy,
-      'OpenTicketStatusId': openTicketStatusId,
-      'IsSynced': isSynced,
-      'IsBillPrinted': isBillPrinted,
-      'Total': total,
-      'IsOSPrinted': isOSPrinted,
-      'IsMerged': isMerged,
-      'MergedChildTables': mergedChildTables,
-      'TextDuration': textDuration,
-      'CartOrderNo': cartOrderNo,
+      'guidId': guidId,
+      'name': name,
+      'comments': comments,
+      'cartItems': cartItems,
+      'savedDate': savedDate,
+      'savedBy': savedBy,
+      'savedByUserId': savedByUserId,
+      'todaysOrderNo': todaysOrderNo,
+      'isDeleted': isDeleted,
+      'deletedBy': deletedBy,
+      'openTicketStatusId': openTicketStatusId,
+      'isSynced': isSynced,
+      'isBillPrinted': isBillPrinted,
+      'total': total,
+      'isOSPrinted': isOSPrinted,
+      'isMerged': isMerged,
+      'mergedChildTables': mergedChildTables,
+      'textDuration': textDuration,
+      'cartOrderNo': cartOrderNo,
     };
   }
 }
