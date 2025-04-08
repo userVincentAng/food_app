@@ -45,12 +45,16 @@ class _ViewCartPageState extends State<ViewCartPage> {
 
   Future<void> _initConnection() async {
     // Set up connection listener
+    _connectionSubscription?.cancel();
     _connectionSubscription =
         _connectionService.connectionStream.listen((connected) {
       if (mounted) {
-      setState(() {
+        setState(() {
           _isConnected = connected;
         });
+        if (!connected) {
+          _showConnectionError();
+        }
       }
     });
 
@@ -60,7 +64,7 @@ class _ViewCartPageState extends State<ViewCartPage> {
         _connectionService.currentPort ==
             int.parse(widget.connectionDetails['port'])) {
       if (mounted) {
-      setState(() {
+        setState(() {
           _isConnected = true;
         });
       }
@@ -75,9 +79,10 @@ class _ViewCartPageState extends State<ViewCartPage> {
       );
     } catch (e) {
       if (mounted) {
-      setState(() {
+        setState(() {
           _isConnected = false;
         });
+        _showConnectionError();
       }
     }
   }
@@ -142,10 +147,12 @@ class _ViewCartPageState extends State<ViewCartPage> {
           );
           Navigator.pop(context, _cartItems);
         }
+      } else {
+        throw Exception('Socket is null');
       }
     } catch (e) {
       if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: ${e.toString()}')),
         );
       }
@@ -159,6 +166,7 @@ class _ViewCartPageState extends State<ViewCartPage> {
   void _showConnectionError() {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: const Text('Connection Error'),
         content: const Text('Please check your connection and try again.'),
@@ -169,6 +177,20 @@ class _ViewCartPageState extends State<ViewCartPage> {
               _initConnection();
             },
             child: const Text('Retry'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => HomePage(
+                    connectionDetails: widget.connectionDetails,
+                  ),
+                ),
+              );
+            },
+            child: const Text('Back to Menu'),
           ),
         ],
       ),
@@ -255,7 +277,7 @@ class _ViewCartPageState extends State<ViewCartPage> {
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: _isLoading || !_isConnected ? null : _checkout,
-                  style: ElevatedButton.styleFrom(
+                    style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 15),
                       backgroundColor:
                           _isConnected ? AppColors.jet : Colors.grey,
@@ -263,9 +285,9 @@ class _ViewCartPageState extends State<ViewCartPage> {
                     child: _isLoading
                         ? const CircularProgressIndicator(color: Colors.white)
                         : const Text(
-                    'Checkout',
+                            'Checkout',
                             style: TextStyle(color: Colors.white),
-                    ),
+                          ),
                   ),
                 ),
               ],

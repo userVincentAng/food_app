@@ -4,6 +4,7 @@ import 'package:food_app/color.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 import 'package:food_app/services/connection_service.dart';
 import 'home_page.dart';
 
@@ -19,6 +20,7 @@ class WelcomePage extends StatefulWidget {
 class _WelcomePageState extends State<WelcomePage> {
   final ConnectionService _connectionService = ConnectionService();
   bool _isConnected = false;
+  StreamSubscription<bool>? _connectionSubscription;
 
   @override
   void initState() {
@@ -30,8 +32,12 @@ class _WelcomePageState extends State<WelcomePage> {
     final ip = widget.connectionDetails['ip'];
     final port = int.tryParse(widget.connectionDetails['port']) ?? 4040;
 
-    _connectionService.connect(ip, port);
-    _connectionService.connectionStream.listen((isConnected) {
+    // Cancel any existing subscription
+    _connectionSubscription?.cancel();
+
+    // Set up new subscription
+    _connectionSubscription =
+        _connectionService.connectionStream.listen((isConnected) {
       if (mounted) {
         setState(() {
           _isConnected = isConnected;
@@ -41,41 +47,52 @@ class _WelcomePageState extends State<WelcomePage> {
         }
       }
     });
+
+    // Only connect if not already connected to the same server
+    if (!_connectionService.isConnected ||
+        _connectionService.currentIp != ip ||
+        _connectionService.currentPort != port) {
+      _connectionService.connect(ip, port);
+    } else {
+      // If already connected, update the local state
+      setState(() {
+        _isConnected = true;
+      });
+    }
   }
 
   void _showConnectionError() {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Connection Lost'),
-            content: const Text(
-              'The connection to the server has been lost. Please check your connection and try again.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  _initConnection();
-                },
-                child: const Text('Retry'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(context).pop(); // Go back to merchant page
-                },
-                child: const Text('Back'),
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: const Text('Connection Lost'),
+        content: const Text(
+          'The connection to the server has been lost. Please check your connection and try again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _initConnection();
+            },
+            child: const Text('Retry'),
           ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).pop(); // Go back to merchant page
+            },
+            child: const Text('Back'),
+          ),
+        ],
+      ),
     );
   }
 
   @override
   void dispose() {
-    _connectionService.dispose();
+    _connectionSubscription?.cancel();
     super.dispose();
   }
 
@@ -111,27 +128,24 @@ class _WelcomePageState extends State<WelcomePage> {
           Align(
             alignment: Alignment.bottomCenter,
             child: GestureDetector(
-              onTap:
-                  _isConnected
-                      ? () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder:
-                                (context) => HomePage(
-                                  connectionDetails: widget.connectionDetails,
-                                ),
+              onTap: _isConnected
+                  ? () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => HomePage(
+                            connectionDetails: widget.connectionDetails,
                           ),
-                        );
-                      }
-                      : null,
+                        ),
+                      );
+                    }
+                  : null,
               child: Container(
                 height: 100,
                 width: double.infinity,
-                color:
-                    _isConnected
-                        ? AppColors.airforceBlue.withAlpha((0.7 * 255).round())
-                        : Colors.grey.withAlpha((0.7 * 255).round()),
+                color: _isConnected
+                    ? AppColors.airforceBlue.withAlpha((0.7 * 255).round())
+                    : Colors.grey.withAlpha((0.7 * 255).round()),
                 child: Center(
                   child: Text(
                     _isConnected ? 'Touch to start' : 'No Connection',
@@ -193,10 +207,13 @@ class _WelcomePageState extends State<WelcomePage> {
 
   // Show settings dialog
   void _showSettingsDialog(BuildContext context) {
-    final ipController = TextEditingController();
-    final portController = TextEditingController();
+    final ipController =
+        TextEditingController(text: widget.connectionDetails['ip']);
+    final portController =
+        TextEditingController(text: widget.connectionDetails['port']);
     bool isConnecting = false;
     String connectionStatus = '';
+    StreamSubscription<bool>? tempConnectionSubscription;
 
     showDialog(
       context: context,
@@ -224,10 +241,9 @@ class _WelcomePageState extends State<WelcomePage> {
                     Text(
                       connectionStatus,
                       style: TextStyle(
-                        color:
-                            connectionStatus.contains('success')
-                                ? Colors.green
-                                : Colors.red,
+                        color: connectionStatus.contains('success')
+                            ? Colors.green
+                            : Colors.red,
                       ),
                     ),
                 ],
@@ -235,6 +251,7 @@ class _WelcomePageState extends State<WelcomePage> {
               actions: [
                 TextButton(
                   onPressed: () {
+                    tempConnectionSubscription?.cancel();
                     Navigator.pop(context);
                   },
                   child: Text('Cancel'),
@@ -257,29 +274,32 @@ class _WelcomePageState extends State<WelcomePage> {
                       connectionStatus = 'Connecting...';
                     });
 
+                    // Cancel any existing subscription
+                    tempConnectionSubscription?.cancel();
+
+                    // Set up new subscription
+                    tempConnectionSubscription =
+                        _connectionService.connectionStream.listen((connected) {
+                      setState(() {
+                        isConnecting = false;
+                        connectionStatus = connected
+                            ? 'Connected successfully!'
+                            : 'Connection failed';
+                      });
+
+                      if (connected) {
+                        // Close the settings dialog after a short delay
+                        Future.delayed(Duration(seconds: 1), () {
+                          Navigator.pop(context); // Close the settings dialog
+                          // Update the connection details
+                          widget.connectionDetails['ip'] = ip;
+                          widget.connectionDetails['port'] = port.toString();
+                        });
+                      }
+                    });
+
                     try {
-                      final socket = await Socket.connect(
-                        ip,
-                        port,
-                        timeout: Duration(seconds: 5),
-                      );
-                      await socket.flush();
-                      socket.destroy();
-
-                      setState(() {
-                        isConnecting = false;
-                        connectionStatus = 'Connected successfully!';
-                      });
-
-                      // Close the settings dialog after a short delay
-                      Future.delayed(Duration(seconds: 1), () {
-                        Navigator.pop(context); // Close the settings dialog
-                      });
-                    } on SocketException catch (e) {
-                      setState(() {
-                        isConnecting = false;
-                        connectionStatus = 'Failed to connect: ${e.message}';
-                      });
+                      await _connectionService.connect(ip, port);
                     } catch (e) {
                       setState(() {
                         isConnecting = false;
@@ -327,16 +347,14 @@ class CarouselImageState extends State<CarouselImage> {
         final Map<String, dynamic> data = json.decode(response.body);
         final List<dynamic> recipes = data['users'];
 
-        final filteredRecipes =
-            recipes
-                .where((recipe) => [2, 4, 7].contains(recipe['id']))
-                .toList();
+        final filteredRecipes = recipes
+            .where((recipe) => [2, 4, 7].contains(recipe['id']))
+            .toList();
 
         setState(() {
-          imageUrls =
-              filteredRecipes
-                  .map((recipe) => recipe['image'] as String)
-                  .toList();
+          imageUrls = filteredRecipes
+              .map((recipe) => recipe['image'] as String)
+              .toList();
           isLoading = false;
         });
       } else {
@@ -357,24 +375,23 @@ class CarouselImageState extends State<CarouselImage> {
     return isLoading
         ? Center(child: CircularProgressIndicator())
         : CarouselSlider(
-          options: CarouselOptions(
-            height: double.infinity,
-            autoPlay: true,
-            enlargeCenterPage: true,
-            viewportFraction: 1.0,
-          ),
-          items:
-              imageUrls.map((imageUrl) {
-                return Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    image: DecorationImage(
-                      image: NetworkImage(imageUrl),
-                      fit: BoxFit.cover,
-                    ),
+            options: CarouselOptions(
+              height: double.infinity,
+              autoPlay: true,
+              enlargeCenterPage: true,
+              viewportFraction: 1.0,
+            ),
+            items: imageUrls.map((imageUrl) {
+              return Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  image: DecorationImage(
+                    image: NetworkImage(imageUrl),
+                    fit: BoxFit.cover,
                   ),
-                );
-              }).toList(),
-        );
+                ),
+              );
+            }).toList(),
+          );
   }
 }

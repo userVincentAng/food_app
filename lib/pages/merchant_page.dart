@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:food_app/color.dart';
 import 'package:food_app/pages/login_page.dart';
 import 'package:food_app/pages/welcome_page.dart';
+import 'package:food_app/services/connection_service.dart';
 import 'package:http/http.dart' as http;
 
 class MerchantPage extends StatefulWidget {
@@ -27,14 +28,14 @@ class _MerchantPageState extends State<MerchantPage> {
 
   final TextEditingController _ipController = TextEditingController();
   final TextEditingController _portController = TextEditingController();
-  final TextEditingController _merchantSearchController = TextEditingController();
+  final TextEditingController _merchantSearchController =
+      TextEditingController();
   final TextEditingController _posSearchController = TextEditingController();
 
-  bool _isConnecting = false;
   bool _isConnected = false;
   String _connectionStatus = 'Not connected';
-  Socket? _socket;
-  Timer? _keepAliveTimer;
+  StreamSubscription<bool>? _connectionSubscription;
+  final ConnectionService _connectionService = ConnectionService();
 
   @override
   void initState() {
@@ -46,7 +47,7 @@ class _MerchantPageState extends State<MerchantPage> {
 
   @override
   void dispose() {
-    _disconnectSocket();
+    _connectionSubscription?.cancel();
     _ipController.dispose();
     _portController.dispose();
     _merchantSearchController.dispose();
@@ -61,9 +62,12 @@ class _MerchantPageState extends State<MerchantPage> {
     });
 
     try {
-      final response = await http.get(
-        Uri.parse('https://raw.githubusercontent.com/jayMatawaran/APIs/refs/heads/main/merchants%26pos.json'),
-      ).timeout(const Duration(seconds: 15));
+      final response = await http
+          .get(
+            Uri.parse(
+                'https://raw.githubusercontent.com/jayMatawaran/APIs/refs/heads/main/merchants%26pos.json'),
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -94,7 +98,7 @@ class _MerchantPageState extends State<MerchantPage> {
       selectedPos = null;
       isPosSelected = false;
       posList = merchants.firstWhere(
-            (m) => m['merchant_name'] == merchant,
+        (m) => m['merchant_name'] == merchant,
         orElse: () => {'pos_systems': []},
       )['pos_systems'];
     });
@@ -117,121 +121,32 @@ class _MerchantPageState extends State<MerchantPage> {
     }
 
     setState(() {
-      _isConnecting = true;
-      _isConnected = false;
       _connectionStatus = 'Connecting...';
     });
 
-    try {
-      await _disconnectSocket();
+    // Cancel any existing subscription
+    _connectionSubscription?.cancel();
 
-      // Connect with a reasonable timeout
-      _socket = await Socket.connect(ip, port, timeout: const Duration(seconds: 5));
-
-      setState(() => _connectionStatus = 'Connected, initializing...');
-
-      // First create and send the ObjectOutputStream header
-      // This matches Java's ObjectOutputStream protocol
-      final header = ByteData(4)
-        ..setUint8(0, 0xac) // STREAM_MAGIC
-        ..setUint8(1, 0xed) // STREAM_MAGIC
-        ..setUint8(2, 0x00) // STREAM_VERSION
-        ..setUint8(3, 0x05); // STREAM_VERSION
-
-      _socket!.add(header.buffer.asUint8List());
-      await _socket!.flush();
-
-      // Set up response handler
-      _socket!.listen(
-            (Uint8List data) {
-          final response = String.fromCharCodes(data).trim();
-          debugPrint('Received: $response');
-
-          // Handle any server response here
-          setState(() {
-            _isConnecting = false;
-            _isConnected = true;
-            _connectionStatus = 'Connected';
-          });
-          _startKeepAlive();
-        },
-        onError: (error) {
-          debugPrint('Socket error: $error');
-          _handleConnectionError(error.toString());
-        },
-        onDone: () {
-          debugPrint('Socket closed by server');
-          _handleDisconnection();
-        },
-      );
-
-      // No need to send additional handshake as the server doesn't expect one
-      // The ObjectOutputStream header is sufficient
-
-    } on TimeoutException catch (e) {
-      _handleConnectionError('Connection timeout: ${e.message}');
-    } on SocketException catch (e) {
-      _handleConnectionError('Network error: ${e.message}');
-    } catch (e) {
-      _handleConnectionError('Connection error: ${e.toString()}');
-    }
-  }
-
-  void _startKeepAlive() {
-    _keepAliveTimer?.cancel();
-    _keepAliveTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      if (_socket != null && _isConnected) {
-        try {
-          // Send a simple keep-alive message
-          _socket!.write('\n');
-          debugPrint('Sent keep-alive');
-        } catch (e) {
-          timer.cancel();
-          _handleDisconnection();
-        }
-      } else {
-        timer.cancel();
-      }
-    });
-  }
-
-  Future<void> _disconnectSocket() async {
-    _keepAliveTimer?.cancel();
-    try {
-      await _socket?.flush();
-      await _socket?.close();
-    } catch (e) {
-      debugPrint('Error while disconnecting: $e');
-    } finally {
+    // Set up new subscription
+    _connectionSubscription =
+        _connectionService.connectionStream.listen((connected) {
       if (mounted) {
         setState(() {
-          _isConnected = false;
-          _isConnecting = false;
+          _isConnected = connected;
+          _connectionStatus = connected ? 'Connected' : 'Disconnected';
         });
       }
-      _socket = null;
-    }
-  }
+    });
 
-  void _handleConnectionError(String error) {
-    if (mounted) {
-      setState(() {
-        _connectionStatus = error;
-        _isConnecting = false;
-        _isConnected = false;
-      });
+    try {
+      await _connectionService.connect(ip, port);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _connectionStatus = 'Error: ${e.toString()}';
+        });
+      }
     }
-    _disconnectSocket();
-  }
-
-  void _handleDisconnection() {
-    if (mounted) {
-      setState(() {
-        _connectionStatus = 'Disconnected';
-        _isConnected = false;
-      });
-    }
-    _disconnectSocket();
   }
 
   @override
@@ -247,11 +162,10 @@ class _MerchantPageState extends State<MerchantPage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const SizedBox(height: 20),
-
-              if (_isLoading)
-                const CircularProgressIndicator(),
-
-              if (_connectionStatus.isNotEmpty && !_isLoading && merchants.isEmpty)
+              if (_isLoading) const CircularProgressIndicator(),
+              if (_connectionStatus.isNotEmpty &&
+                  !_isLoading &&
+                  merchants.isEmpty)
                 Column(
                   children: [
                     Text(_connectionStatus),
@@ -262,7 +176,6 @@ class _MerchantPageState extends State<MerchantPage> {
                     ),
                   ],
                 ),
-
               if (merchants.isNotEmpty) ...[
                 SizedBox(
                   width: buttonWidth,
@@ -287,7 +200,6 @@ class _MerchantPageState extends State<MerchantPage> {
                 ),
                 const SizedBox(height: 16),
               ],
-
               if (isMerchantSelected) ...[
                 SizedBox(
                   width: buttonWidth,
@@ -312,12 +224,11 @@ class _MerchantPageState extends State<MerchantPage> {
                 ),
                 const SizedBox(height: 16),
               ],
-
               if (isPosSelected) ...[
                 const Text('Enter Connection Details',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
-
                 SizedBox(
                   width: buttonWidth,
                   child: TextField(
@@ -329,7 +240,6 @@ class _MerchantPageState extends State<MerchantPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
                 SizedBox(
                   width: buttonWidth,
                   child: TextField(
@@ -342,25 +252,26 @@ class _MerchantPageState extends State<MerchantPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
                 SizedBox(
                   width: buttonWidth,
                   child: ElevatedButton(
-                    onPressed: _isConnecting ? null : _connectToServer,
+                    onPressed: _connectionService.isConnecting
+                        ? null
+                        : _connectToServer,
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 15),
-                      backgroundColor: _isConnected ? Colors.green : AppColors.jet,
+                      backgroundColor:
+                          _isConnected ? Colors.green : AppColors.jet,
                     ),
-                    child: _isConnecting
+                    child: _connectionService.isConnecting
                         ? const CircularProgressIndicator(color: Colors.white)
                         : Text(
-                      _isConnected ? 'Connected' : 'Connect',
-                      style: const TextStyle(color: Colors.white),
-                    ),
+                            _isConnected ? 'Connected' : 'Connect',
+                            style: const TextStyle(color: Colors.white),
+                          ),
                   ),
                 ),
                 const SizedBox(height: 8),
-
                 Text(
                   _connectionStatus,
                   style: TextStyle(
@@ -369,7 +280,6 @@ class _MerchantPageState extends State<MerchantPage> {
                 ),
                 const SizedBox(height: 16),
               ],
-
               if (_isConnected) ...[
                 SizedBox(
                   width: buttonWidth,
@@ -399,14 +309,14 @@ class _MerchantPageState extends State<MerchantPage> {
                 ),
                 const SizedBox(height: 16),
               ],
-
               SizedBox(
                 width: buttonWidth,
                 child: ElevatedButton(
                   onPressed: () {
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(builder: (context) => const LoginPage()),
+                      MaterialPageRoute(
+                          builder: (context) => const LoginPage()),
                     );
                   },
                   child: const Text('Logout'),
@@ -432,7 +342,8 @@ class _MerchantSelectionPanel extends StatefulWidget {
   });
 
   @override
-  State<_MerchantSelectionPanel> createState() => _MerchantSelectionPanelState();
+  State<_MerchantSelectionPanel> createState() =>
+      _MerchantSelectionPanelState();
 }
 
 class _MerchantSelectionPanelState extends State<_MerchantSelectionPanel> {
@@ -480,7 +391,8 @@ class _MerchantSelectionPanelState extends State<_MerchantSelectionPanel> {
             child: ListView.builder(
               itemCount: filteredMerchants.length,
               itemBuilder: (context, index) {
-                final merchant = filteredMerchants[index]['merchant_name'].toString();
+                final merchant =
+                    filteredMerchants[index]['merchant_name'].toString();
                 return ListTile(
                   title: Text(merchant),
                   onTap: () {
