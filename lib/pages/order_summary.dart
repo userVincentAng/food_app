@@ -9,23 +9,23 @@ class OrderSummaryPanel extends StatelessWidget {
   final List<Map<String, dynamic>> orderItems;
   final VoidCallback onCancel;
   final VoidCallback onDone;
-  final Function(List<Map<String, dynamic>>) onOrderUpdated; // Add this callback
-  final Map<String, dynamic> connectionDetails; // Add connection details
+  final Function(List<Map<String, dynamic>>) onOrderUpdated;
+  final Map<String, dynamic> connectionDetails;
 
-  const OrderSummaryPanel({
-    super.key,
-    required this.totalAmount,
-    required this.totalItems,
-    required this.orderItems,
-    required this.onCancel,
-    required this.onDone,
-    required this.onOrderUpdated, // Add this parameter
-    required this.connectionDetails
-  });
+  const OrderSummaryPanel(
+      {super.key,
+      required this.totalAmount,
+      required this.totalItems,
+      required this.orderItems,
+      required this.onCancel,
+      required this.onDone,
+      required this.onOrderUpdated,
+      required this.connectionDetails});
 
   @override
   Widget build(BuildContext context) {
-    final totalQuantity = orderItems.fold(0, (sum, item) => sum + (item['quantity'] as int));
+    final totalQuantity =
+        orderItems.fold(0, (sum, item) => sum + (item['quantity'] as int));
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -63,24 +63,37 @@ class OrderSummaryPanel extends StatelessWidget {
                     SizedBox(height: 4),
                     Text(
                       "Total: ₱ ${totalAmount.toStringAsFixed(2)}  |  Items: $totalQuantity",
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
                 TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ViewCartPage(
-                          orderItems: orderItems,
-                          onOrderUpdated: onOrderUpdated, // Pass the callback,
-                          connectionDetails: connectionDetails
-                        ),
-                      ),
-                    );
-                  },
-                  child: Icon(Icons.shopping_cart, color: AppColors.airforceBlue, size: 25),
+                  onPressed: orderItems.isEmpty
+                      ? null
+                      : () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ViewCartPage(
+                                connectionDetails: connectionDetails,
+                                cartItems: orderItems,
+                                totalAmount: totalAmount,
+                              ),
+                            ),
+                          ).then((updatedItems) {
+                            if (updatedItems != null) {
+                              onOrderUpdated(updatedItems);
+                            }
+                          });
+                        },
+                  child: Icon(
+                    Icons.shopping_cart,
+                    color: orderItems.isEmpty
+                        ? Colors.grey
+                        : AppColors.airforceBlue,
+                    size: 25,
+                  ),
                 ),
               ],
             ),
@@ -96,10 +109,12 @@ class OrderSummaryPanel extends StatelessWidget {
                   onPressed: onCancel,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.flame,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
                     padding: EdgeInsets.symmetric(vertical: 14),
                   ),
-                  child: Text("Cancel Order", style: TextStyle(fontSize: 16, color: Colors.white)),
+                  child: Text("Cancel Order",
+                      style: TextStyle(fontSize: 16, color: Colors.white)),
                 ),
               ),
               SizedBox(width: 12),
@@ -108,10 +123,12 @@ class OrderSummaryPanel extends StatelessWidget {
                   onPressed: onDone,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.airforceBlue,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
                     padding: EdgeInsets.symmetric(vertical: 14),
                   ),
-                  child: Text("Done", style: TextStyle(fontSize: 16, color: Colors.white)),
+                  child: Text("Done",
+                      style: TextStyle(fontSize: 16, color: Colors.white)),
                 ),
               ),
             ],
