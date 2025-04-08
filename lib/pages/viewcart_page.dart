@@ -35,6 +35,7 @@ class _ViewCartPageState extends State<ViewCartPage> {
   StreamSubscription<bool>? _connectionSubscription;
   final ConnectionService _connectionService = ConnectionService();
   List<Map<String, dynamic>> _cartItems = [];
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -43,7 +44,7 @@ class _ViewCartPageState extends State<ViewCartPage> {
     _initConnection();
   }
 
-  Future<void> _initConnection() async {
+  void _initConnection() {
     // Set up connection listener
     _connectionSubscription?.cancel();
     _connectionSubscription =
@@ -51,10 +52,12 @@ class _ViewCartPageState extends State<ViewCartPage> {
       if (mounted) {
         setState(() {
           _isConnected = connected;
+          if (!connected) {
+            _errorMessage = 'Not connected to server. Please connect first.';
+          } else {
+            _errorMessage = null;
+          }
         });
-        if (!connected) {
-          _showConnectionError();
-        }
       }
     });
 
@@ -66,6 +69,7 @@ class _ViewCartPageState extends State<ViewCartPage> {
       if (mounted) {
         setState(() {
           _isConnected = true;
+          _errorMessage = null;
         });
       }
       return;
@@ -73,7 +77,7 @@ class _ViewCartPageState extends State<ViewCartPage> {
 
     // Try to connect if not already connected
     try {
-      await _connectionService.connect(
+      _connectionService.connect(
         widget.connectionDetails['ip'],
         int.parse(widget.connectionDetails['port']),
       );
@@ -81,21 +85,13 @@ class _ViewCartPageState extends State<ViewCartPage> {
       if (mounted) {
         setState(() {
           _isConnected = false;
+          _errorMessage = 'Failed to connect: ${e.toString()}';
         });
-        _showConnectionError();
       }
     }
   }
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _commentsController.dispose();
-    _connectionSubscription?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _checkout() async {
+  Future<void> _handleCheckout() async {
     if (_nameController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter your name')),
@@ -104,11 +100,16 @@ class _ViewCartPageState extends State<ViewCartPage> {
     }
 
     if (!_isConnected) {
-      _showConnectionError();
+      setState(() {
+        _errorMessage = 'Not connected to server. Please connect first.';
+      });
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
     try {
       // Create SavedCartItem
@@ -132,69 +133,41 @@ class _ViewCartPageState extends State<ViewCartPage> {
       );
 
       // Convert to JSON
-      final jsonData = request.toJson();
-      final jsonString = json.encode(jsonData);
+      final jsonString = jsonEncode(request.toJson());
+      final bytes = utf8.encode(jsonString);
+      final lengthBytes = ByteData(4)..setInt32(0, bytes.length, Endian.big);
 
-      // Send the request
-      final socket = _connectionService.socket;
-      if (socket != null) {
-        socket.add(utf8.encode(jsonString));
-        await socket.flush();
+      _connectionService.socket?.add(lengthBytes.buffer.asUint8List());
+      _connectionService.socket?.add(bytes);
+      await _connectionService.socket?.flush();
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Order placed successfully!')),
-          );
-          Navigator.pop(context, _cartItems);
-        }
-      } else {
-        throw Exception('Socket is null');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Order sent successfully')),
+        );
+        Navigator.pop(context, _cartItems);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
-        );
+        setState(() {
+          _errorMessage = 'Failed to send order: ${e.toString()}';
+        });
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
 
-  void _showConnectionError() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Connection Error'),
-        content: const Text('Please check your connection and try again.'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _initConnection();
-            },
-            child: const Text('Retry'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => HomePage(
-                    connectionDetails: widget.connectionDetails,
-                  ),
-                ),
-              );
-            },
-            child: const Text('Back to Menu'),
-          ),
-        ],
-      ),
-    );
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _commentsController.dispose();
+    _connectionSubscription?.cancel();
+    super.dispose();
   }
 
   @override
@@ -217,17 +190,23 @@ class _ViewCartPageState extends State<ViewCartPage> {
               );
             },
           ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _initConnection,
+          ),
         ],
       ),
       body: Column(
         children: [
-          if (!_isConnected)
+          if (_errorMessage != null)
             Container(
-              padding: const EdgeInsets.all(8),
-              color: Colors.red,
-              child: const Text(
-                'No connection to server',
-                style: TextStyle(color: Colors.white),
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              color: Colors.red.shade100,
+              child: Text(
+                _errorMessage!,
+                style: TextStyle(color: Colors.red.shade900),
+                textAlign: TextAlign.center,
               ),
             ),
           Expanded(
@@ -276,9 +255,9 @@ class _ViewCartPageState extends State<ViewCartPage> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _isLoading || !_isConnected ? null : _checkout,
+                    onPressed: _isLoading ? null : _handleCheckout,
                     style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                       backgroundColor:
                           _isConnected ? AppColors.jet : Colors.grey,
                     ),
