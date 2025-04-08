@@ -4,7 +4,8 @@ class CustomizeOrderPanel extends StatefulWidget {
   final Map<String, dynamic> itemDetails;
   final Map<String, dynamic> product;
 
-  const CustomizeOrderPanel({super.key, required this.itemDetails, required this.product});
+  const CustomizeOrderPanel(
+      {super.key, required this.itemDetails, required this.product});
 
   @override
   CustomizeOrderPanelState createState() => CustomizeOrderPanelState();
@@ -27,8 +28,9 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
     double totalPrice = widget.product['Price'] ?? widget.itemDetails['Price'];
 
     if (selectedVariant != null) {
-      var selectedVariantDetails = widget.itemDetails['itemVariants'].firstWhere(
-            (variant) => variant['SKUId'] == selectedVariant,
+      var selectedVariantDetails =
+          widget.itemDetails['itemVariants'].firstWhere(
+        (variant) => variant['SKUId'] == selectedVariant,
         orElse: () => {},
       );
       if (selectedVariantDetails.isNotEmpty) {
@@ -49,10 +51,10 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
   Widget build(BuildContext context) {
     var variants = widget.itemDetails['itemVariants'] ?? [];
     var modifiers = widget.itemDetails['itemModifiers'] ?? [];
-    var productName = widget.product['ProductName'] ?? widget.itemDetails['ProductName'];
+    var productName =
+        widget.product['ProductName'] ?? widget.itemDetails['ProductName'];
     var basePrice = widget.product['Price'] ?? widget.itemDetails['Price'];
     var imageUrl = widget.product['ImgUrl'];
-
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -106,10 +108,12 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
 
                   // Variants Selection
                   if (variants.isNotEmpty) ...[
-                    const Text("Select Size", style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text("Select Size",
+                        style: TextStyle(fontWeight: FontWeight.bold)),
                     ...variants.map<Widget>((variant) {
                       return RadioListTile<int>(
-                        title: Text("${variant['CombiName']} - ₱${variant['Price']}"),
+                        title: Text(
+                            "${variant['CombiName']} - ₱${variant['Price']}"),
                         value: variant['SKUId'],
                         groupValue: selectedVariant,
                         onChanged: (value) {
@@ -124,26 +128,32 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
 
                   // Modifiers Selection
                   if (modifiers.isNotEmpty) ...[
-                    const Text("Add Extras", style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text("Add Extras",
+                        style: TextStyle(fontWeight: FontWeight.bold)),
                     ...modifiers.map<Widget>((modifier) {
                       bool isRequired = modifier['IsRequired'] ?? false;
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(modifier['ModifierName'] ?? "Extras",
-                              style: const TextStyle(fontWeight: FontWeight.bold)),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold)),
                           if (isRequired)
-                            ...modifier['ModifierOptions'].map<Widget>((option) {
+                            ...modifier['ModifierOptions']
+                                .map<Widget>((option) {
                               return RadioListTile<int>(
-                                title: Text("${option['Name']} - ₱${option['Price']}"),
+                                title: Text(
+                                    "${option['Name']} - ₱${option['Price']}"),
                                 value: option['Id'],
-                                groupValue: selectedModifiers.containsKey(option['Id'])
-                                    ? option['Id']
-                                    : null,
+                                groupValue:
+                                    selectedModifiers.containsKey(option['Id'])
+                                        ? option['Id']
+                                        : null,
                                 onChanged: (value) {
                                   setState(() {
                                     selectedModifiers.removeWhere((key, val) =>
-                                    val['ModifierId'] == modifier['ModifierId']);
+                                        val['ModifierId'] ==
+                                        modifier['ModifierId']);
                                     selectedModifiers[option['Id']] = option;
                                     _updateFinalPrice();
                                   });
@@ -151,10 +161,13 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
                               );
                             }).toList(),
                           if (!isRequired)
-                            ...modifier['ModifierOptions'].map<Widget>((option) {
+                            ...modifier['ModifierOptions']
+                                .map<Widget>((option) {
                               return CheckboxListTile(
-                                title: Text("${option['Name']} - ₱${option['Price']}"),
-                                value: selectedModifiers.containsKey(option['Id']),
+                                title: Text(
+                                    "${option['Name']} - ₱${option['Price']}"),
+                                value:
+                                    selectedModifiers.containsKey(option['Id']),
                                 onChanged: (bool? value) {
                                   setState(() {
                                     if (value == true) {
@@ -172,7 +185,8 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
                     }).toList(),
                   ],
                   // Add Notes Section
-                  const Text("Add Notes", style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text("Add Notes",
+                      style: TextStyle(fontWeight: FontWeight.bold)),
                   TextFormField(
                     controller: _notesController,
                     decoration: const InputDecoration(
@@ -190,17 +204,19 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
                       IconButton(
                         onPressed: _quantity > 1
                             ? () {
-                          setState(() {
-                            _quantity--;
-                            _updateFinalPrice();
-                          });
-                        }
+                                setState(() {
+                                  _quantity--;
+                                  _updateFinalPrice();
+                                });
+                              }
                             : null,
-                        icon: const Icon(Icons.remove_circle, color: Colors.red),
+                        icon:
+                            const Icon(Icons.remove_circle, color: Colors.red),
                       ),
                       Text(
                         '$_quantity',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       IconButton(
                         onPressed: () {
@@ -239,7 +255,8 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
                 ElevatedButton(
                   onPressed: () => Navigator.pop(context),
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                  child: const Text('Cancel', style: TextStyle(color: Colors.white)),
+                  child: const Text('Cancel',
+                      style: TextStyle(color: Colors.white)),
                 ),
                 ElevatedButton(
                   onPressed: () {
@@ -252,18 +269,21 @@ class CustomizeOrderPanelState extends State<CustomizeOrderPanel> {
                     Navigator.pop(context, {
                       'variantId': selectedVariant,
                       'variantDetails': selectedVariant != null
-                          ? variants.firstWhere((variant) => variant['SKUId'] == selectedVariant)
+                          ? variants.firstWhere(
+                              (variant) => variant['SKUId'] == selectedVariant)
                           : {},
                       'modifiers': selectedModifiers.values.toList(),
                       'notes': _notesController.text.trim(),
                       'quantity': _quantity, // Include quantity in the response
                       'price': finalPrice,
                       'imageUrl': imageUrl,
-                      'ProductName': widget.product['ProductName'] ?? widget.itemDetails['ProductName'],
+                      'ProductName': widget.product['ProductName'] ??
+                          widget.itemDetails['ProductName'],
                       'Id': widget.product['Id'] ?? widget.itemDetails['Id'],
                     });
                   },
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                  style:
+                      ElevatedButton.styleFrom(backgroundColor: Colors.green),
                   child: Text(
                     "Add to Cart ₱${finalPrice.toStringAsFixed(2)}",
                     style: const TextStyle(color: Colors.white),

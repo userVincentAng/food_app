@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:food_app/color.dart';
 import 'package:food_app/models/ordering_device_request.dart';
 import 'package:food_app/pages/home_page.dart';
+import 'package:food_app/pages/customize_order.dart';
 import 'package:food_app/services/connection_service.dart';
 import 'package:food_app/widgets/cart_item.dart';
 import 'package:uuid/uuid.dart';
@@ -116,6 +117,8 @@ class _ViewCartPageState extends State<ViewCartPage> {
                   'Price': item['Price'],
                   'quantity': item['quantity'],
                   'ImgUrl': item['ImgUrl'],
+                  'modifiers': item['modifiers'],
+                  'notes': item['notes'],
                 })
             .toList(),
         'SavedDate': DateTime.now().toIso8601String(),
@@ -157,6 +160,15 @@ class _ViewCartPageState extends State<ViewCartPage> {
       for (var item in cartItems) {
         debugPrint(
             '    * ${item['ProductName']} - ₱${item['Price']} x ${item['quantity']}');
+        if (item['modifiers'] != null) {
+          debugPrint('      Modifiers:');
+          for (var mod in item['modifiers']) {
+            debugPrint('        • ${mod['Name']} - ₱${mod['Price']}');
+          }
+        }
+        if (item['notes'] != null && item['notes'].isNotEmpty) {
+          debugPrint('      Notes: ${item['notes']}');
+        }
       }
       debugPrint('===========================');
 
@@ -211,6 +223,40 @@ class _ViewCartPageState extends State<ViewCartPage> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  void _editCartItem(int index) async {
+    final item = _cartItems[index];
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => CustomizeOrderPanel(
+        itemDetails: {
+          'itemVariants': item['itemVariants'] ?? [],
+          'itemModifiers': item['itemModifiers'] ?? [],
+        },
+        product: {
+          'ProductName': item['ProductName'],
+          'Price': item['Price'],
+          'ImgUrl': item['ImgUrl'],
+          'Id': item['Id'],
+        },
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _cartItems[index] = {
+          ...item,
+          'quantity': result['quantity'],
+          'notes': result['notes'],
+          'modifiers': result['modifiers'],
+          'selectedVariant': result['variantId'],
+          'variantDetails': result['variantDetails'],
+          'Price': result['price'],
+        };
+      });
     }
   }
 
@@ -271,6 +317,14 @@ class _ViewCartPageState extends State<ViewCartPage> {
                   price: item['Price'] ?? 0.0,
                   quantity: item['quantity'] ?? 1,
                   imageUrl: item['ImgUrl'],
+                  modifiers: item['modifiers'],
+                  notes: item['notes'],
+                  onEdit: () => _editCartItem(index),
+                  onDelete: () {
+                    setState(() {
+                      _cartItems.removeAt(index);
+                    });
+                  },
                 );
               },
             ),
