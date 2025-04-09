@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'dart:convert';
+import 'dart:typed_data';
 
 class ConnectionService {
   static final ConnectionService _instance = ConnectionService._internal();
@@ -19,14 +21,20 @@ class ConnectionService {
   int _connectionAttempts = 0;
   static const int _maxConnectionAttempts = 3;
   static const Duration _reconnectDelay = Duration(seconds: 5);
+  bool _handshakeReceived = false;
+  bool _connectionEstablished = false;
+  bool _forceReconnect = false;
 
   String? get currentIp => _currentIp;
   int? get currentPort => _currentPort;
   Socket? get socket => _socket;
 
   Future<void> connect(String ip, int port) async {
-    // If already connected to the same server, do nothing
-    if (isConnected && _currentIp == ip && _currentPort == port) {
+    // If already connected to the same server and not forcing reconnect, do nothing
+    if (isConnected &&
+        _currentIp == ip &&
+        _currentPort == port &&
+        !_forceReconnect) {
       debugPrint('Already connected to $ip:$port');
       return;
     }
@@ -37,6 +45,9 @@ class ConnectionService {
     }
 
     _isConnecting = true;
+    _handshakeReceived = false;
+    _connectionEstablished = false;
+    _forceReconnect = false;
 
     // If connected to a different server, disconnect first
     if (isConnected) {
@@ -56,7 +67,6 @@ class ConnectionService {
       _socket =
           await Socket.connect(ip, port, timeout: const Duration(seconds: 10));
       _connectionAttempts = 0; // Reset attempts on successful connection
-      _connectionController.add(true);
 
       // Set up socket listeners for BytesWiz POS
       _socket!.listen(
@@ -77,8 +87,15 @@ class ConnectionService {
       );
 
       // Send initial handshake for BytesWiz POS
-      _sendBytesWizHandshake();
+      await _sendBytesWizHandshake();
 
+      // Wait for handshake response with timeout
+      await _waitForHandshakeResponse();
+
+      // Consider connection established even if we don't get a handshake response
+      // Some POS systems might not respond to handshakes but still accept data
+      _connectionEstablished = true;
+      _connectionController.add(true);
       debugPrint('Connected to BytesWiz POS at $ip:$port');
     } catch (e) {
       debugPrint('Connection error to BytesWiz POS: $e');
@@ -88,40 +105,64 @@ class ConnectionService {
     }
   }
 
-  void _sendBytesWizHandshake() {
+  Future<void> _waitForHandshakeResponse() async {
+    // Wait for up to 5 seconds for a handshake response
+    int attempts = 0;
+    while (!_handshakeReceived && attempts < 50) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      attempts++;
+    }
+
+    // Even if we don't get a handshake response, we'll consider the connection
+    // established if we got this far (socket is connected)
+    if (_socket != null) {
+      debugPrint('No handshake response received, but socket is connected');
+    }
+  }
+
+  Future<void> _sendBytesWizHandshake() async {
     if (_socket == null) return;
 
     try {
-      // Send BytesWiz POS specific handshake
-      final handshake = [
-        0xac, 0xed, // STREAM_MAGIC
-        0x00, 0x05, // STREAM_VERSION
-        0x77, // TC_BLOCKDATA
-        0x00, 0x0A, // Length of handshake data
-        0x42, 0x79, 0x74, 0x65, 0x73, 0x57, 0x69, 0x7A, // "BytesWiz"
-        0x50, 0x4F, 0x53, // "POS"
-      ];
+      // Simplified handshake - just send the magic bytes
+      final handshake = [0xac, 0xed];
 
       _socket!.add(Uint8List.fromList(handshake));
+      await _socket!.flush();
       debugPrint('Sent BytesWiz POS handshake');
     } catch (e) {
       debugPrint('Error sending BytesWiz POS handshake: $e');
+      // Don't throw an exception here, just log the error
+      // Some POS systems might not respond to handshakes
     }
   }
 
   void _handleBytesWizResponse(List<int> data) {
     // Handle specific BytesWiz POS responses
+    // The POS system seems to respond with just the magic bytes (0xAC 0xED)
     if (data.length >= 2 && data[0] == 0xac && data[1] == 0xed) {
       debugPrint('Received valid BytesWiz POS response');
-      // Process the response based on BytesWiz POS protocol
+      _handshakeReceived = true;
+
+      // If we haven't established the connection yet, do it now
+      if (!_connectionEstablished) {
+        _connectionEstablished = true;
+        _connectionController.add(true);
+      }
     }
   }
 
   void _handleDisconnection(String reason) {
     debugPrint('Handling BytesWiz POS disconnection: $reason');
-    _socket?.close();
-    _socket = null;
-    _connectionController.add(false);
+
+    // Only close the socket if we're not in a reconnection attempt
+    if (_connectionAttempts >= _maxConnectionAttempts) {
+      _socket?.close();
+      _socket = null;
+      _connectionController.add(false);
+      _handshakeReceived = false;
+      _connectionEstablished = false;
+    }
 
     // Attempt to reconnect if we haven't exceeded max attempts
     if (_connectionAttempts < _maxConnectionAttempts &&
@@ -134,6 +175,8 @@ class ConnectionService {
       _reconnectTimer?.cancel();
       _reconnectTimer = Timer(_reconnectDelay, () {
         if (_currentIp != null && _currentPort != null) {
+          // Force reconnect on next attempt
+          _forceReconnect = true;
           connect(_currentIp!, _currentPort!);
         }
       });
@@ -148,6 +191,9 @@ class ConnectionService {
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
     _connectionAttempts = 0;
+    _handshakeReceived = false;
+    _connectionEstablished = false;
+    _forceReconnect = false;
     await _socket?.close();
     _socket = null;
     _currentIp = null;
@@ -158,5 +204,52 @@ class ConnectionService {
   void dispose() {
     disconnect();
     _connectionController.close();
+  }
+
+  /// Sends data to the POS system in a format it can understand
+  /// Returns true if the data was sent successfully
+  Future<bool> sendDataToPOS(Map<String, dynamic> data) async {
+    if (_socket == null) {
+      debugPrint('Cannot send data: Socket is null');
+      return false;
+    }
+
+    try {
+      // Convert data to JSON
+      final jsonString = jsonEncode(data);
+      debugPrint('Sending data to POS: $jsonString');
+
+      // Create a UTF-8 encoded byte array of the JSON string
+      final jsonBytes = utf8.encode(jsonString);
+
+      // Create a buffer for the entire message
+      final buffer = BytesBuilder();
+
+      // Add BytesWiz POS protocol header - simplified to match what the POS expects
+      buffer.add([0xac, 0xed]);
+
+      // Add length of data (2 bytes, big-endian)
+      final dataLength = jsonBytes.length;
+      buffer.add([
+        (dataLength >> 8) & 0xFF, // High byte
+        dataLength & 0xFF, // Low byte
+      ]);
+
+      // Add the JSON data
+      buffer.add(jsonBytes);
+
+      // Get the complete message
+      final completeMessage = buffer.toBytes();
+
+      // Send the complete message in a single write operation
+      _socket!.add(completeMessage);
+      await _socket!.flush();
+
+      debugPrint('Data sent to POS successfully');
+      return true;
+    } catch (e) {
+      debugPrint('Error sending data to POS: $e');
+      return false;
+    }
   }
 }

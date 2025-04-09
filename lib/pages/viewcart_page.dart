@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:food_app/color.dart';
@@ -95,13 +93,65 @@ class _ViewCartPageState extends State<ViewCartPage> {
     }
   }
 
+  Future<void> _initConnectionAsync() async {
+    // Set up connection listener
+    _connectionSubscription?.cancel();
+    _connectionSubscription =
+        _connectionService.connectionStream.listen((connected) {
+      if (mounted) {
+        setState(() {
+          _isConnected = connected;
+          if (!connected) {
+            _errorMessage = 'Not connected to server. Please connect first.';
+          } else {
+            _errorMessage = null;
+          }
+        });
+      }
+    });
+
+    // Check if already connected to the same server
+    if (_connectionService.isConnected &&
+        _connectionService.currentIp == widget.connectionDetails['ip'] &&
+        _connectionService.currentPort ==
+            int.parse(widget.connectionDetails['port'])) {
+      if (mounted) {
+        setState(() {
+          _isConnected = true;
+          _errorMessage = null;
+        });
+      }
+      return;
+    }
+
+    // If connected to a different server, disconnect first
+    if (_connectionService.isConnected) {
+      await _connectionService.disconnect();
+    }
+
+    // Try to connect if not already connected
+    try {
+      await _connectionService.connect(
+        widget.connectionDetails['ip'],
+        int.parse(widget.connectionDetails['port']),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isConnected = false;
+          _errorMessage = 'Failed to connect: ${e.toString()}';
+        });
+      }
+    }
+  }
+
   Future<void> _handleCheckout() async {
     if (!_isConnected) {
       setState(() {
         _errorMessage = 'Not connected to server. Please connect first.';
       });
       // Try to reconnect
-      _initConnection();
+      await _initConnectionAsync();
       return;
     }
 
@@ -143,13 +193,6 @@ class _ViewCartPageState extends State<ViewCartPage> {
         'CartOrderNo': '',
       };
 
-      // Get the socket
-      final socket = _connectionService.socket;
-      if (socket == null) {
-        throw Exception(
-            'Socket is not available. Please connect to the server first.');
-      }
-
       // Create the request in the format expected by Java server
       final requestMap = {
         'RequestType': 1,
@@ -157,30 +200,24 @@ class _ViewCartPageState extends State<ViewCartPage> {
         'SavedCartItems': savedCartItem,
       };
 
-      // Convert to JSON
-      final jsonString = jsonEncode(requestMap);
-      debugPrint('JSON being sent: $jsonString');
+      // Always try to reconnect before sending data to ensure a fresh connection
+      await _initConnectionAsync();
 
-      // Create a UTF-8 encoded byte array of the JSON string
-      final jsonBytes = utf8.encode(jsonString);
+      // Check if reconnection was successful
+      if (!_connectionService.isConnected) {
+        throw Exception('Failed to connect to POS system');
+      }
 
-      // Create the complete message with length prefix
-      final messageLength = jsonBytes.length;
-      final lengthBytes = ByteData(4)..setInt32(0, messageLength, Endian.big);
+      // Send data using the ConnectionService
+      final success = await _connectionService.sendDataToPOS(requestMap);
 
-      debugPrint('Sending message length: $messageLength bytes');
-
-      // Send the length first (4 bytes)
-      socket.add(lengthBytes.buffer.asUint8List());
-      await socket.flush();
-
-      // Send the actual JSON data
-      socket.add(jsonBytes);
-      await socket.flush();
+      if (!success) {
+        throw Exception('Failed to send data to POS system');
+      }
 
       // Wait for server response
       debugPrint('Waiting for server response...');
-      await Future.delayed(const Duration(seconds: 1));
+      await Future.delayed(const Duration(seconds: 2));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -190,7 +227,9 @@ class _ViewCartPageState extends State<ViewCartPage> {
       }
     } catch (e) {
       debugPrint('Error sending data: $e');
-      throw Exception('Failed to send data: $e');
+      setState(() {
+        _errorMessage = 'Failed to send data: $e';
+      });
     } finally {
       if (mounted) {
         setState(() {
