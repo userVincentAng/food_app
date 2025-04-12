@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:connectivity_plus/connectivity_plus.dart' as connectivity;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:collection/collection.dart';
 import 'package:food_app/pages/welcome_page.dart';
@@ -122,18 +122,19 @@ class HomePageState extends State<HomePage> {
   }
 
   Future<void> _initConnectivity() async {
-    final List<ConnectivityResult> connectivityResult =
-        await Connectivity().checkConnectivity();
+    final List<connectivity.ConnectivityResult> connectivityResult =
+        await connectivity.Connectivity().checkConnectivity();
     setState(() {
-      _isOnline = !connectivityResult.contains(ConnectivityResult.none);
+      _isOnline =
+          !connectivityResult.contains(connectivity.ConnectivityResult.none);
     });
 
-    Connectivity()
+    connectivity.Connectivity()
         .onConnectivityChanged
-        .listen((List<ConnectivityResult> results) {
+        .listen((List<connectivity.ConnectivityResult> results) {
       if (!mounted) return;
       setState(() {
-        _isOnline = !results.contains(ConnectivityResult.none);
+        _isOnline = !results.contains(connectivity.ConnectivityResult.none);
       });
 
       if (_isOnline && (categories.isEmpty || products.isEmpty)) {
@@ -143,9 +144,9 @@ class HomePageState extends State<HomePage> {
   }
 
   Future<void> _loadData() async {
-    final List<ConnectivityResult> connectivityResult =
-        await Connectivity().checkConnectivity();
-    if (connectivityResult.contains(ConnectivityResult.none)) {
+    final List<connectivity.ConnectivityResult> connectivityResult =
+        await connectivity.Connectivity().checkConnectivity();
+    if (connectivityResult.contains(connectivity.ConnectivityResult.none)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
