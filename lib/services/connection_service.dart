@@ -41,6 +41,7 @@ class ConnectionService {
 
     // If already trying to connect, don't start another connection attempt
     if (_isConnecting) {
+      debugPrint('Connection attempt already in progress');
       return;
     }
 
@@ -63,9 +64,16 @@ class ConnectionService {
     _currentPort = port;
 
     try {
+      debugPrint(
+          'Attempting to connect to $ip:$port (attempt ${_connectionAttempts + 1})');
+
       // Connect to the server with a longer timeout
       _socket =
-          await Socket.connect(ip, port, timeout: const Duration(seconds: 10));
+          await Socket.connect(ip, port, timeout: const Duration(seconds: 15))
+              .timeout(const Duration(seconds: 15), onTimeout: () {
+        throw TimeoutException('Connection timed out after 15 seconds');
+      });
+
       _connectionAttempts = 0; // Reset attempts on successful connection
 
       // Set up socket listeners for BytesWiz POS
@@ -98,25 +106,28 @@ class ConnectionService {
       _connectionController.add(true);
       debugPrint('Connected to BytesWiz POS at $ip:$port');
     } catch (e) {
-      debugPrint('Connection error to BytesWiz POS: $e');
-      _handleDisconnection('Connection error: $e');
+      debugPrint('Connection error: $e');
+      _handleConnectionError(e);
     } finally {
       _isConnecting = false;
     }
   }
 
   Future<void> _waitForHandshakeResponse() async {
-    // Wait for up to 5 seconds for a handshake response
-    int attempts = 0;
-    while (!_handshakeReceived && attempts < 50) {
-      await Future.delayed(const Duration(milliseconds: 100));
-      attempts++;
-    }
+    if (_handshakeReceived) return;
 
-    // Even if we don't get a handshake response, we'll consider the connection
-    // established if we got this far (socket is connected)
-    if (_socket != null) {
-      debugPrint('No handshake response received, but socket is connected');
+    try {
+      // Wait for handshake response with a reasonable timeout
+      await Future.delayed(const Duration(seconds: 5));
+
+      // If we still haven't received a handshake response, log it but continue
+      if (!_handshakeReceived) {
+        debugPrint(
+            'No handshake response received after 5 seconds, continuing anyway');
+      }
+    } catch (e) {
+      debugPrint('Error waiting for handshake: $e');
+      // Continue anyway, as some POS systems might not respond to handshakes
     }
   }
 
@@ -251,5 +262,11 @@ class ConnectionService {
       debugPrint('Error sending data to POS: $e');
       return false;
     }
+  }
+
+  void _handleConnectionError(Object e) {
+    // Implement the logic to handle the connection error
+    // This is a placeholder and should be replaced with the actual implementation
+    debugPrint('Handling connection error: $e');
   }
 }

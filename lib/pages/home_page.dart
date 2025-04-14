@@ -122,55 +122,72 @@ class HomePageState extends State<HomePage> {
   }
 
   Future<void> _initConnectivity() async {
-    final List<connectivity.ConnectivityResult> connectivityResult =
-        await connectivity.Connectivity().checkConnectivity();
-    setState(() {
-      _isOnline =
-          !connectivityResult.contains(connectivity.ConnectivityResult.none);
-    });
-
-    connectivity.Connectivity()
-        .onConnectivityChanged
-        .listen((List<connectivity.ConnectivityResult> results) {
-      if (!mounted) return;
-      setState(() {
-        _isOnline = !results.contains(connectivity.ConnectivityResult.none);
-      });
-
-      if (_isOnline && (categories.isEmpty || products.isEmpty)) {
-        _loadData();
+    try {
+      final List<connectivity.ConnectivityResult> connectivityResult =
+          await connectivity.Connectivity().checkConnectivity();
+      if (mounted) {
+        setState(() {
+          _isOnline = !connectivityResult
+              .contains(connectivity.ConnectivityResult.none);
+        });
       }
-    });
+
+      connectivity.Connectivity()
+          .onConnectivityChanged
+          .listen((List<connectivity.ConnectivityResult> results) {
+        if (!mounted) return;
+        setState(() {
+          _isOnline = !results.contains(connectivity.ConnectivityResult.none);
+        });
+
+        if (_isOnline && (categories.isEmpty || products.isEmpty)) {
+          _loadData();
+        }
+      });
+    } catch (e) {
+      // If connectivity check fails, assume we're online to avoid blocking the app
+      if (mounted) {
+        setState(() {
+          _isOnline = true;
+        });
+      }
+    }
   }
 
   Future<void> _loadData() async {
-    final List<connectivity.ConnectivityResult> connectivityResult =
-        await connectivity.Connectivity().checkConnectivity();
-    if (connectivityResult.contains(connectivity.ConnectivityResult.none)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No internet connection - using cached data'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-      // Load cached data here
-      return;
-    }
-
     try {
+      final List<connectivity.ConnectivityResult> connectivityResult =
+          await connectivity.Connectivity().checkConnectivity();
+      if (connectivityResult.contains(connectivity.ConnectivityResult.none)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No internet connection - using cached data'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        // Load cached data here
+        return;
+      }
+
       await _fetchCategories();
       await _fetchProducts();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading data: ${e.toString()}'),
-            backgroundColor: Colors.red,
-            action: SnackBarAction(label: 'Retry', onPressed: _loadData),
-          ),
-        );
+      // If connectivity check fails, try to load data anyway
+      try {
+        await _fetchCategories();
+        await _fetchProducts();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error loading data: ${e.toString()}'),
+              backgroundColor: Colors.red,
+              action: SnackBarAction(label: 'Retry', onPressed: _loadData),
+            ),
+          );
+        }
       }
     }
   }
